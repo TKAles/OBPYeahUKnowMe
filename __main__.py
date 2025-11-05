@@ -5,7 +5,7 @@ Main application entry point for OBP Yeah U Know Me
 import sys
 from PyQt6 import QtWidgets, uic
 from PyQt6.QtWidgets import QMainWindow, QDialog, QWizard, QWizardPage, QVBoxLayout, QHBoxLayout, QRadioButton, QLabel, QLineEdit, QButtonGroup, QListWidgetItem, QPushButton, QComboBox, QMessageBox, QGraphicsScene, QGraphicsRectItem, QGraphicsEllipseItem, QGraphicsTextItem
-from PyQt6.QtCore import QTimer, QRectF
+from PyQt6.QtCore import QTimer, QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QPen
 import math
 import numpy as np
@@ -575,7 +575,7 @@ class BuildVisualizer:
 
         # Fit view to content
         self.scene.setSceneRect(self.scene.itemsBoundingRect())
-        self.graphics_view.fitInView(self.scene.sceneRect(), 1)  # KeepAspectRatio
+        self.graphics_view.fitInView(self.scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
 
 
 class RecoaterDialog(QDialog):
