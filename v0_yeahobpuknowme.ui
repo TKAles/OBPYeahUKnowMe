@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1135</width>
-    <height>749</height>
+    <height>863</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -178,27 +178,11 @@
        </layout>
       </item>
       <item>
-       <layout class="QVBoxLayout" name="verticalLayout_2">
+       <layout class="QVBoxLayout" name="visualization_layout">
         <item>
          <widget class="QLabel" name="label_7">
           <property name="text">
            <string>Visualizer (nothing will appear here until valid steps are selected):</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QWidget" name="qwidget_matplotlib_window" native="true">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="MinimumExpanding" vsizetype="Maximum">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="minimumSize">
-           <size>
-            <width>800</width>
-            <height>800</height>
-           </size>
           </property>
          </widget>
         </item>

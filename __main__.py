@@ -767,7 +767,7 @@ class RecoaterDialog(QDialog):
 class MainWindow(QMainWindow):
     """Main application window with UI signals connected"""
 
-    def __init__(self):
+    def __init__(self, parent=None):
         super().__init__()
         # Load the UI file
         uic.loadUi('v0_yeahobpuknowme.ui', self)
@@ -776,38 +776,10 @@ class MainWindow(QMainWindow):
         self.recoater_settings = RecoaterSettings()
 
         # Initialize the 3D build visualizer
-        try:
-            if MATPLOTLIB_AVAILABLE:
-                self.build_visualizer = Build3DVisualizer(self)
+        self.build_visualizer = Build3DVisualizer()
 
-                # Replace the graphics view with matplotlib widget
-                graphics_parent = self.gview_visualizer.parent()
-                if graphics_parent and hasattr(graphics_parent, 'layout') and graphics_parent.layout():
-                    parent_layout = graphics_parent.layout()
-                    # Get the index of the graphics view in the layout
-                    for i in range(parent_layout.count()):
-                        if parent_layout.itemAt(i).widget() == self.gview_visualizer:
-                            # Remove the old widget
-                            parent_layout.removeWidget(self.gview_visualizer)
-                            self.gview_visualizer.setParent(None)
-                            # Insert the new visualizer at the same position
-                            parent_layout.insertWidget(i, self.build_visualizer)
-                            break
-
-                    # Update reference
-                    self.gview_visualizer = self.build_visualizer
-                    print("3D matplotlib visualizer integrated successfully")
-                else:
-                    print("Could not find parent layout for graphics view")
-                    self.build_visualizer = None
-            else:
-                print("Matplotlib not available - 3D visualization disabled")
-                self.build_visualizer = None
-
-        except Exception as e:
-            print(f"Failed to initialize 3D visualizer: {e}")
-            self.build_visualizer = None
-
+        self.vis_layout = self.findChild(QVBoxLayout, "visualization_layout")
+        self.vis_layout.addWidget(self.build_visualizer)
         # Connect line edit signals (editingFinished)
         self.le_spotsize.editingFinished.connect(self.on_beam_spot_size_changed)
         self.le_beampower.editingFinished.connect(self.on_beam_power_changed)
