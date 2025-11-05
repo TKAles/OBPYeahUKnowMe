@@ -187,7 +187,20 @@
          </widget>
         </item>
         <item>
-         <widget class="QGraphicsView" name="gview_visualizer"/>
+         <widget class="QWidget" name="qwidget_matplotlib_window" native="true">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="MinimumExpanding" vsizetype="Maximum">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>800</width>
+            <height>800</height>
+           </size>
+          </property>
+         </widget>
         </item>
        </layout>
       </item>
