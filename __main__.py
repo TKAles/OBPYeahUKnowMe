@@ -16,41 +16,41 @@ class MainWindow(QMainWindow):
         uic.loadUi('v0_yeahobpuknowme.ui', self)
 
         # Connect line edit signals (editingFinished)
-        self.lineEdit.editingFinished.connect(self.on_beam_spot_size_changed)
-        self.lineEdit_2.editingFinished.connect(self.on_beam_power_changed)
-        self.lineEdit_3.editingFinished.connect(self.on_layer_height_changed)
+        self.le_spotsize.editingFinished.connect(self.on_beam_spot_size_changed)
+        self.le_beampower.editingFinished.connect(self.on_beam_power_changed)
+        self.le_layerheight.editingFinished.connect(self.on_layer_height_changed)
 
         # Connect button signals (clicked)
-        self.pushButton.clicked.connect(self.on_add_step_clicked)
-        self.pushButton_5.clicked.connect(self.on_edit_step_clicked)
-        self.pushButton_2.clicked.connect(self.on_delete_step_clicked)
-        self.pushButton_4.clicked.connect(self.on_view_recoater_settings_clicked)
-        self.pushButton_3.clicked.connect(self.on_generate_build_package_clicked)
+        self.btn_add_buildstep.clicked.connect(self.on_add_step_clicked)
+        self.btn_edit_buildstep.clicked.connect(self.on_edit_step_clicked)
+        self.btn_del_buildstep.clicked.connect(self.on_delete_step_clicked)
+        self.btn_recoater_settings.clicked.connect(self.on_view_recoater_settings_clicked)
+        self.btn_genpackage.clicked.connect(self.on_generate_build_package_clicked)
 
         # Connect checkbox signals (toggled)
-        self.checkBox_3.toggled.connect(self.on_heat_balance_toggled)
-        self.checkBox_2.toggled.connect(self.on_jump_safe_toggled)
-        self.checkBox.toggled.connect(self.on_splatter_safe_toggled)
-        self.checkBox_4.toggled.connect(self.on_triggered_start_toggled)
+        self.enable_heatbalance.toggled.connect(self.on_heat_balance_toggled)
+        self.enable_jumpsafe.toggled.connect(self.on_jump_safe_toggled)
+        self.enable_splattersafe.toggled.connect(self.on_splatter_safe_toggled)
+        self.enable_triggeredstart.toggled.connect(self.on_triggered_start_toggled)
 
         # Connect list widget signals
-        self.listWidget.itemClicked.connect(self.on_build_sequence_item_clicked)
-        self.listWidget.currentItemChanged.connect(self.on_build_sequence_selection_changed)
+        self.build_step_list.itemClicked.connect(self.on_build_sequence_item_clicked)
+        self.build_step_list.currentItemChanged.connect(self.on_build_sequence_selection_changed)
 
     # Line Edit dummy handlers
     def on_beam_spot_size_changed(self):
         """Handle beam spot size editing finished"""
-        value = self.lineEdit.text()
+        value = self.le_spotsize.text()
         print(f"Beam Spot Size changed: {value}")
 
     def on_beam_power_changed(self):
         """Handle beam power editing finished"""
-        value = self.lineEdit_2.text()
+        value = self.le_beampower.text()
         print(f"Beam Power changed: {value}")
 
     def on_layer_height_changed(self):
         """Handle layer height editing finished"""
-        value = self.lineEdit_3.text()
+        value = self.le_layerheight.text()
         print(f"Layer Height changed: {value}")
 
     # Button dummy handlers

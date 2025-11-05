@@ -37,7 +37,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QLineEdit" name="lineEdit"/>
+         <widget class="QLineEdit" name="le_spotsize"/>
         </item>
         <item>
          <widget class="QLabel" name="label_3">
@@ -50,7 +50,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QLineEdit" name="lineEdit_2"/>
+         <widget class="QLineEdit" name="le_beampower"/>
         </item>
         <item>
          <widget class="QLabel" name="label_4">
@@ -60,7 +60,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QListWidget" name="listWidget">
+         <widget class="QListWidget" name="build_step_list">
           <item>
            <property name="text">
             <string>Cube| 10x10x10mm | 5 Repetitions</string>
@@ -76,21 +76,21 @@
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_2">
           <item>
-           <widget class="QPushButton" name="pushButton">
+           <widget class="QPushButton" name="btn_add_buildstep">
             <property name="text">
              <string>Add Step</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="pushButton_5">
+           <widget class="QPushButton" name="btn_edit_buildstep">
             <property name="text">
              <string>Edit Step</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QPushButton" name="pushButton_2">
+           <widget class="QPushButton" name="btn_del_buildstep">
             <property name="text">
              <string>Delete Step</string>
             </property>
@@ -106,10 +106,10 @@
          </widget>
         </item>
         <item>
-         <widget class="QLineEdit" name="lineEdit_3"/>
+         <widget class="QLineEdit" name="le_layerheight"/>
         </item>
         <item>
-         <widget class="QPushButton" name="pushButton_4">
+         <widget class="QPushButton" name="btn_recoater_settings">
           <property name="text">
            <string>View Recoater Blade Settings</string>
           </property>
@@ -123,35 +123,35 @@
          </widget>
         </item>
         <item>
-         <widget class="QCheckBox" name="checkBox_3">
+         <widget class="QCheckBox" name="enable_heatbalance">
           <property name="text">
            <string>heatBalance</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QCheckBox" name="checkBox_2">
+         <widget class="QCheckBox" name="enable_jumpsafe">
           <property name="text">
            <string>jumpSafe</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QCheckBox" name="checkBox">
+         <widget class="QCheckBox" name="enable_splattersafe">
           <property name="text">
            <string>splatterSafe</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QCheckBox" name="checkBox_4">
+         <widget class="QCheckBox" name="enable_triggeredstart">
           <property name="text">
            <string>triggeredStart</string>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="pushButton_3">
+         <widget class="QPushButton" name="btn_genpackage">
           <property name="text">
            <string>Generate Build Package</string>
           </property>
@@ -169,7 +169,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QGraphicsView" name="graphicsView"/>
+         <widget class="QGraphicsView" name="gview_visualizer"/>
         </item>
        </layout>
       </item>
