@@ -4,7 +4,7 @@ Main application entry point for OBP Yeah U Know Me
 
 import sys
 from PyQt6 import QtWidgets, uic
-from PyQt6.QtWidgets import QMainWindow, QDialog, QWizard, QWizardPage, QVBoxLayout, QHBoxLayout, QRadioButton, QLabel, QLineEdit, QButtonGroup, QListWidgetItem, QPushButton, QComboBox, QMessageBox
+from PyQt6.QtWidgets import QMainWindow, QSizePolicy, QDialog, QWizard, QWizardPage, QVBoxLayout, QHBoxLayout, QRadioButton, QLabel, QLineEdit, QButtonGroup, QListWidgetItem, QPushButton, QComboBox, QMessageBox
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QBrush, QColor, QPen
 import math
@@ -513,15 +513,11 @@ class Build3DVisualizer(FigureCanvas):
     """3D visualizer for build steps using matplotlib"""
 
     def __init__(self, parent=None):
-        if not MATPLOTLIB_AVAILABLE:
-            # Fallback to simple widget
-            super(FigureCanvas, self).__init__()
-            return
-
+        self.canvas = FigureCanvas()
         self.figure = Figure(figsize=(8, 6), dpi=100)
+        self.canvas.figure = self.figure
         super().__init__(self.figure)
         self.setParent(parent)
-
         # Create 3D subplot
         self.ax = self.figure.add_subplot(111, projection='3d')
         self.layer_height = 0.1
@@ -531,7 +527,7 @@ class Build3DVisualizer(FigureCanvas):
         self.ax.set_ylabel('Y (mm)')
         self.ax.set_zlabel('Z (mm)')
         self.ax.set_title('Build Visualization')
-
+        
         print("3D matplotlib visualizer initialized successfully")
 
     def create_box_vertices(self, width, length, height, offset_x=0, offset_y=0, offset_z=0):
@@ -808,7 +804,7 @@ class MainWindow(QMainWindow):
 
         # Connect layer height changes to visualizer update
         self.le_layerheight.textChanged.connect(self.update_visualizer)
-
+        self.build_visualizer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         # Set default values
         self.set_default_values()
 
