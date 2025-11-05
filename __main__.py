@@ -54,14 +54,18 @@ class BuildStep:
     def format_dimensions(self) -> str:
         """Format dimensions for display"""
         if self.shape_type == "square":
-            return f"{self.dimensions.get('size', 0)}x{self.dimensions.get('size', 0)}x{self.dimensions.get('height', 0)}mm"
+            return f"{self.dimensions.get('size', 0)}x{self.dimensions.get('size', 0)}mm"
         elif self.shape_type == "rectangle":
-            return f"{self.dimensions.get('width', 0)}x{self.dimensions.get('length', 0)}x{self.dimensions.get('height', 0)}mm"
+            return f"{self.dimensions.get('width', 0)}x{self.dimensions.get('length', 0)}mm"
         elif self.shape_type == "circle":
-            return f"Ø{self.dimensions.get('diameter', 0)}x{self.dimensions.get('height', 0)}mm"
+            return f"Ø{self.dimensions.get('diameter', 0)}mm"
         elif self.shape_type == "ellipse":
-            return f"{self.dimensions.get('width', 0)}x{self.dimensions.get('length', 0)}x{self.dimensions.get('height', 0)}mm ellipse"
+            return f"{self.dimensions.get('width', 0)}x{self.dimensions.get('length', 0)}mm ellipse"
         return ""
+
+    def calculate_total_height(self, layer_height: float) -> float:
+        """Calculate total build height from repetitions and layer height"""
+        return self.repetitions * layer_height
 
     def to_list_item_text(self) -> str:
         """Format as list item text"""
@@ -82,25 +86,25 @@ class BuildStep:
             # Parse dimensions based on shape type
             dimensions = {}
             if shape_type == "square":
-                # Format: "10.0x10.0x5.0mm"
+                # Format: "10.0x10.0mm"
                 dims = dimensions_str.replace("mm", "").split("x")
-                if len(dims) == 3:
-                    dimensions = {"size": float(dims[0]), "height": float(dims[2])}
-            elif shape_type == "rectangle":
-                # Format: "15.0x20.0x8.0mm"
-                dims = dimensions_str.replace("mm", "").split("x")
-                if len(dims) == 3:
-                    dimensions = {"width": float(dims[0]), "length": float(dims[1]), "height": float(dims[2])}
-            elif shape_type == "circle":
-                # Format: "Ø25.0x10.0mm"
-                dims = dimensions_str.replace("Ø", "").replace("mm", "").split("x")
                 if len(dims) == 2:
-                    dimensions = {"diameter": float(dims[0]), "height": float(dims[1])}
+                    dimensions = {"size": float(dims[0])}
+            elif shape_type == "rectangle":
+                # Format: "15.0x20.0mm"
+                dims = dimensions_str.replace("mm", "").split("x")
+                if len(dims) == 2:
+                    dimensions = {"width": float(dims[0]), "length": float(dims[1])}
+            elif shape_type == "circle":
+                # Format: "Ø25.0mm"
+                dims = dimensions_str.replace("Ø", "").replace("mm", "")
+                if dims:
+                    dimensions = {"diameter": float(dims)}
             elif shape_type == "ellipse":
-                # Format: "12.0x18.0x6.0mm ellipse"
+                # Format: "12.0x18.0mm ellipse"
                 dims = dimensions_str.replace("mm ellipse", "").split("x")
-                if len(dims) == 3:
-                    dimensions = {"width": float(dims[0]), "length": float(dims[1]), "height": float(dims[2])}
+                if len(dims) == 2:
+                    dimensions = {"width": float(dims[0]), "length": float(dims[1])}
 
             return cls(shape_type=shape_type, dimensions=dimensions, repetitions=repetitions)
 
@@ -204,24 +208,20 @@ class ParametersPage(QWizardPage):
     def setup_square_parameters(self):
         """Setup parameters for square"""
         self.add_parameter_field("Size", "size", "mm")
-        self.add_parameter_field("Height", "height", "mm")
 
     def setup_rectangle_parameters(self):
         """Setup parameters for rectangle"""
         self.add_parameter_field("Width", "width", "mm")
         self.add_parameter_field("Length", "length", "mm")
-        self.add_parameter_field("Height", "height", "mm")
 
     def setup_circle_parameters(self):
         """Setup parameters for circle"""
         self.add_parameter_field("Diameter", "diameter", "mm")
-        self.add_parameter_field("Height", "height", "mm")
 
     def setup_ellipse_parameters(self):
         """Setup parameters for ellipse"""
         self.add_parameter_field("Width", "width", "mm")
         self.add_parameter_field("Length", "length", "mm")
-        self.add_parameter_field("Height", "height", "mm")
 
     def add_parameter_field(self, label_text, field_name, unit):
         """Add a parameter input field"""
@@ -427,18 +427,14 @@ class EditBuildStepDialog(QDialog):
         # Add parameter fields based on shape type
         if shape_type == "square":
             self.add_parameter_field("Size", "size", "mm", load_values)
-            self.add_parameter_field("Height", "height", "mm", load_values)
         elif shape_type == "rectangle":
             self.add_parameter_field("Width", "width", "mm", load_values)
             self.add_parameter_field("Length", "length", "mm", load_values)
-            self.add_parameter_field("Height", "height", "mm", load_values)
         elif shape_type == "circle":
             self.add_parameter_field("Diameter", "diameter", "mm", load_values)
-            self.add_parameter_field("Height", "height", "mm", load_values)
         elif shape_type == "ellipse":
             self.add_parameter_field("Width", "width", "mm", load_values)
             self.add_parameter_field("Length", "length", "mm", load_values)
-            self.add_parameter_field("Height", "height", "mm", load_values)
 
     def add_parameter_field(self, label_text: str, field_name: str, unit: str, load_value: bool = True):
         """Add a parameter input field"""
@@ -730,33 +726,32 @@ class Visualizer3D(QOpenGLWidget):
             min(1.0, base_color[2] + color_variation * 0.3)
         )
 
+        # Use layer height as the height for each layer
+        layer_height = self.layer_height
+
         if build_step.shape_type == "square":
             size = dims.get("size", 10)
-            height = dims.get("height", 5)
-            vertices, indices = self.generate_box_vertices(size, size, height, 0, 0, z_offset)
+            vertices, indices = self.generate_box_vertices(size, size, layer_height, 0, 0, z_offset)
             return Shape3D(vertices, indices, color)
 
         elif build_step.shape_type == "rectangle":
             width = dims.get("width", 10)
             length = dims.get("length", 15)
-            height = dims.get("height", 5)
-            vertices, indices = self.generate_box_vertices(width, length, height, 0, 0, z_offset)
+            vertices, indices = self.generate_box_vertices(width, length, layer_height, 0, 0, z_offset)
             return Shape3D(vertices, indices, color)
 
         elif build_step.shape_type == "circle":
             diameter = dims.get("diameter", 10)
             radius = diameter / 2
-            height = dims.get("height", 5)
-            vertices, indices = self.generate_cylinder_vertices(radius, height, 16, 0, 0, z_offset)
+            vertices, indices = self.generate_cylinder_vertices(radius, layer_height, 16, 0, 0, z_offset)
             return Shape3D(vertices, indices, color)
 
         elif build_step.shape_type == "ellipse":
             # For ellipse, we'll create a scaled cylinder (simplified)
             width = dims.get("width", 10)
             length = dims.get("length", 15)
-            height = dims.get("height", 5)
             radius = max(width, length) / 2
-            vertices, indices = self.generate_cylinder_vertices(radius, height, 24, 0, 0, z_offset)
+            vertices, indices = self.generate_cylinder_vertices(radius, layer_height, 24, 0, 0, z_offset)
 
             # Scale vertices to create ellipse
             vertices_array = np.array(vertices).reshape(-1, 3)
