@@ -610,6 +610,9 @@ class Build3DVisualizer(FigureCanvas):
         current_z = 0
         colors = ['gold', 'lightgreen', 'lightblue', 'lightcoral', 'plum', 'orange']
 
+        # Collect all polygons with their z-order for proper rendering
+        all_polygons = []
+
         for step_index, build_step in enumerate(build_steps):
             color = colors[step_index % len(colors)]
             dims = build_step.dimensions
@@ -621,22 +624,28 @@ class Build3DVisualizer(FigureCanvas):
                 if build_step.shape_type == "square":
                     size = dims.get("size", 10)
                     faces = self.create_box_vertices(size, size, layer_height, 0, 0, z_offset)
-                    poly3d = Poly3DCollection(faces, alpha=0.8, facecolor=color, edgecolor='black')
-                    self.ax.add_collection3d(poly3d)
+                    poly3d = Poly3DCollection(faces, facecolor=color, edgecolor='black',
+                                             linewidths=0.5, alpha=0.9)
+                    poly3d.set_sort_zpos(z_offset)
+                    all_polygons.append((z_offset, poly3d))
 
                 elif build_step.shape_type == "rectangle":
                     width = dims.get("width", 10)
                     length = dims.get("length", 15)
                     faces = self.create_box_vertices(width, length, layer_height, 0, 0, z_offset)
-                    poly3d = Poly3DCollection(faces, alpha=0.8, facecolor=color, edgecolor='black')
-                    self.ax.add_collection3d(poly3d)
+                    poly3d = Poly3DCollection(faces, facecolor=color, edgecolor='black',
+                                             linewidths=0.5, alpha=0.9)
+                    poly3d.set_sort_zpos(z_offset)
+                    all_polygons.append((z_offset, poly3d))
 
                 elif build_step.shape_type == "circle":
                     diameter = dims.get("diameter", 10)
                     radius = diameter / 2
                     faces = self.create_cylinder_faces(radius, layer_height, 16, 0, 0, z_offset)
-                    poly3d = Poly3DCollection(faces, alpha=0.8, facecolor=color, edgecolor='black')
-                    self.ax.add_collection3d(poly3d)
+                    poly3d = Poly3DCollection(faces, facecolor=color, edgecolor='black',
+                                             linewidths=0.5, alpha=0.9)
+                    poly3d.set_sort_zpos(z_offset)
+                    all_polygons.append((z_offset, poly3d))
 
                 elif build_step.shape_type == "ellipse":
                     width = dims.get("width", 10)
@@ -657,10 +666,16 @@ class Build3DVisualizer(FigureCanvas):
                             scaled_face.append(scaled_vertex)
                         scaled_faces.append(scaled_face)
 
-                    poly3d = Poly3DCollection(scaled_faces, alpha=0.8, facecolor=color, edgecolor='black')
-                    self.ax.add_collection3d(poly3d)
+                    poly3d = Poly3DCollection(scaled_faces, facecolor=color, edgecolor='black',
+                                             linewidths=0.5, alpha=0.9)
+                    poly3d.set_sort_zpos(z_offset)
+                    all_polygons.append((z_offset, poly3d))
 
                 current_z += layer_height
+
+        # Add polygons in order from bottom to top for correct z-sorting
+        for z_pos, poly3d in sorted(all_polygons, key=lambda x: x[0]):
+            self.ax.add_collection3d(poly3d)
 
         # Set axis limits and aspect ratio
         if build_steps:
