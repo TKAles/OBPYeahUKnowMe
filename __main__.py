@@ -839,6 +839,9 @@ class MainWindow(QMainWindow):
         # Set default values
         self.set_default_values()
 
+        # Fix main layout proportions
+        self.fix_layout_proportions()
+
     def set_default_values(self):
         """Set sane default values for the UI"""
         # Set beam parameters
@@ -851,27 +854,71 @@ class MainWindow(QMainWindow):
 
         print("Default values set: Spot Size=100μm, Power=100W, Layer Height=0.1mm")
 
-    def add_move_buttons(self):
-        """Add move up/down buttons to the build step button layout"""
+    def fix_layout_proportions(self):
+        """Fix the main layout to give proper proportions"""
         try:
-            # Find the horizontal layout containing the build step buttons
-            button_layout = self.btn_add_buildstep.parent().layout()
-            if button_layout:
+            # Get the main horizontal layout (horizontalLayout)
+            main_h_layout = self.centralWidget().layout().itemAt(0).layout()
+
+            if main_h_layout:
+                # Set stretch factors: left column = 1, right column = 4 (80% width)
+                main_h_layout.setStretchFactor(0, 1)  # Left column (controls)
+                main_h_layout.setStretchFactor(1, 4)  # Right column (visualizer)
+                print("Layout proportions fixed: 20% controls, 80% visualizer")
+            else:
+                print("Could not find main horizontal layout")
+        except Exception as e:
+            print(f"Failed to fix layout proportions: {e}")
+
+    def add_move_buttons(self):
+        """Add move up/down buttons below the existing build step buttons"""
+        try:
+            # Find the vertical layout that contains the build step controls
+            # We need to go up the parent hierarchy to find the right spot
+            build_step_list_parent = self.build_step_list.parent()
+            if build_step_list_parent and hasattr(build_step_list_parent, 'layout'):
+                parent_layout = build_step_list_parent.layout()
+
+                # Create a new horizontal layout for move buttons
+                move_button_layout = QHBoxLayout()
+
                 # Create move up and down buttons
                 self.btn_move_up = QPushButton("Move Up")
                 self.btn_move_down = QPushButton("Move Down")
 
-                # Add buttons to the layout
-                button_layout.addWidget(self.btn_move_up)
-                button_layout.addWidget(self.btn_move_down)
+                # Add buttons to the new layout
+                move_button_layout.addWidget(self.btn_move_up)
+                move_button_layout.addWidget(self.btn_move_down)
+
+                # Find where to insert the new layout (after the existing button layout)
+                # Look for the existing button layout and insert after it
+                for i in range(parent_layout.count()):
+                    item = parent_layout.itemAt(i)
+                    if item and item.layout():
+                        # Check if this layout contains our existing buttons
+                        layout = item.layout()
+                        for j in range(layout.count()):
+                            widget_item = layout.itemAt(j)
+                            if widget_item and widget_item.widget() == self.btn_add_buildstep:
+                                # Insert the move button layout right after this one
+                                parent_layout.insertLayout(i + 1, move_button_layout)
+                                print("Move up/down buttons added successfully below existing buttons")
+
+                                # Connect signals
+                                self.btn_move_up.clicked.connect(self.on_move_up_clicked)
+                                self.btn_move_down.clicked.connect(self.on_move_down_clicked)
+                                return
+
+                # If we couldn't find the right spot, add at the end
+                parent_layout.addLayout(move_button_layout)
 
                 # Connect signals
                 self.btn_move_up.clicked.connect(self.on_move_up_clicked)
                 self.btn_move_down.clicked.connect(self.on_move_down_clicked)
 
-                print("Move up/down buttons added successfully")
+                print("Move up/down buttons added at end of layout")
             else:
-                print("Could not find button layout")
+                print("Could not find parent layout for build step controls")
         except Exception as e:
             print(f"Failed to add move buttons: {e}")
 
