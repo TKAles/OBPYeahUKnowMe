@@ -4,30 +4,15 @@ Main application entry point for OBP Yeah U Know Me
 
 import sys
 from PyQt6 import QtWidgets, uic
-from PyQt6.QtWidgets import QMainWindow, QDialog, QWizard, QWizardPage, QVBoxLayout, QHBoxLayout, QRadioButton, QLabel, QLineEdit, QButtonGroup, QListWidgetItem, QPushButton, QComboBox, QMessageBox
-from PyQt6.QtOpenGLWidgets import QOpenGLWidget
-from PyQt6.QtOpenGL import QOpenGLBuffer, QOpenGLVertexArrayObject, QOpenGLShaderProgram
-from PyQt6.QtCore import QTimer
-from PyQt6.QtGui import QMatrix4x4, QVector3D
+from PyQt6.QtWidgets import QMainWindow, QDialog, QWizard, QWizardPage, QVBoxLayout, QHBoxLayout, QRadioButton, QLabel, QLineEdit, QButtonGroup, QListWidgetItem, QPushButton, QComboBox, QMessageBox, QGraphicsScene, QGraphicsRectItem, QGraphicsEllipseItem, QGraphicsTextItem
+from PyQt6.QtCore import QTimer, QRectF
+from PyQt6.QtGui import QBrush, QColor, QPen
 import math
 import numpy as np
 from dataclasses import dataclass
 from typing import Optional
 
-# OpenGL imports with error handling
-try:
-    from OpenGL.GL import (
-        glEnable, glDisable, glClear, glClearColor, glViewport,
-        glMatrixMode, glLoadIdentity, glFrustum, glTranslatef, glRotatef,
-        glColor3f, glEnableClientState, glDisableClientState, glVertexPointer,
-        glDrawElements, GL_DEPTH_TEST, GL_CULL_FACE, GL_COLOR_BUFFER_BIT,
-        GL_DEPTH_BUFFER_BIT, GL_PROJECTION, GL_MODELVIEW, GL_VERTEX_ARRAY,
-        GL_TRIANGLES, GL_FLOAT, GL_UNSIGNED_INT
-    )
-    OPENGL_AVAILABLE = True
-except ImportError:
-    OPENGL_AVAILABLE = False
-    print("OpenGL not available - 3D visualization will be disabled")
+# Simple 2D visualization using QGraphicsView - no OpenGL required
 
 
 @dataclass
@@ -512,314 +497,85 @@ class EditBuildStepDialog(QDialog):
         return self.current_build_step
 
 
-class Shape3D:
-    """Container for 3D shape data"""
-    def __init__(self, vertices, indices, color=(0.8, 0.6, 0.2)):
-        self.vertices = np.array(vertices, dtype=np.float32)
-        self.indices = np.array(indices, dtype=np.uint32)
-        self.color = color
+class BuildVisualizer:
+    """Simple 2D visualizer for build steps using QGraphicsView"""
 
-
-class Visualizer3D(QOpenGLWidget):
-    """3D visualizer for build steps"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.shapes = []
-        self.camera_distance = 100.0
-        self.camera_rotation_x = -30.0
-        self.camera_rotation_y = 45.0
-        self.layer_height = 0.1  # Default layer height in mm
-
-        # Animation timer
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update)
-        self.timer.start(16)  # ~60 FPS
-
-    def initializeGL(self):
-        """Initialize OpenGL"""
-        if not OPENGL_AVAILABLE:
-            print("OpenGL not available - 3D visualization disabled")
-            return
-
-        # Enable depth testing
-        glEnable(GL_DEPTH_TEST)
-        glEnable(GL_CULL_FACE)
-
-        # Set background color (dark gray)
-        glClearColor(0.2, 0.2, 0.2, 1.0)
-
-        print("3D Visualizer initialized successfully")
-
-    def resizeGL(self, w, h):
-        """Handle window resize"""
-        if not OPENGL_AVAILABLE:
-            return
-
-        glViewport(0, 0, w, h)
-
-    def paintGL(self):
-        """Render the 3D scene"""
-        if not OPENGL_AVAILABLE:
-            # Draw a simple fallback message
-            from PyQt6.QtGui import QPainter
-            painter = QPainter(self)
-            painter.drawText(self.rect(), 1, "3D Visualization requires OpenGL")
-            return
-
-        # Clear screen and depth buffer
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-
-        # Set up matrices
-        self.setup_matrices()
-
-        # Render all shapes
-        for shape in self.shapes:
-            self.render_shape(shape)
-
-    def setup_matrices(self):
-        """Setup projection and view matrices"""
-        if not OPENGL_AVAILABLE:
-            return
-
-        # Setup projection matrix
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-
-        # Perspective projection
-        width = self.width()
-        height = self.height() if self.height() > 0 else 1
-        aspect = width / height
-
-        # Simple perspective setup
-        fov = 45.0
-        near = 1.0
-        far = 1000.0
-
-        top = near * math.tan(math.radians(fov / 2.0))
-        bottom = -top
-        right = top * aspect
-        left = -right
-
-        glFrustum(left, right, bottom, top, near, far)
-
-        # Setup model-view matrix
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-
-        # Camera positioning
-        glTranslatef(0, 0, -self.camera_distance)
-        glRotatef(self.camera_rotation_x, 1, 0, 0)
-        glRotatef(self.camera_rotation_y, 0, 1, 0)
-
-    def render_shape(self, shape):
-        """Render a single shape"""
-        if not OPENGL_AVAILABLE:
-            return
-
-        # Set color
-        glColor3f(*shape.color)
-
-        # Enable vertex arrays
-        glEnableClientState(GL_VERTEX_ARRAY)
-        glVertexPointer(3, GL_FLOAT, 0, shape.vertices)
-
-        # Draw triangles
-        glDrawElements(GL_TRIANGLES, len(shape.indices),
-                      GL_UNSIGNED_INT, shape.indices)
-
-        # Disable vertex arrays
-        glDisableClientState(GL_VERTEX_ARRAY)
-
-    def generate_box_vertices(self, width, length, height, offset_x=0, offset_y=0, offset_z=0):
-        """Generate vertices and indices for a box"""
-        w, l, h = width/2, length/2, height/2
-        x, y, z = offset_x, offset_y, offset_z
-
-        vertices = [
-            # Bottom face
-            x-w, y-l, z-h,  x+w, y-l, z-h,  x+w, y+l, z-h,  x-w, y+l, z-h,
-            # Top face
-            x-w, y-l, z+h,  x+w, y-l, z+h,  x+w, y+l, z+h,  x-w, y+l, z+h,
-        ]
-
-        indices = [
-            # Bottom
-            0, 1, 2, 0, 2, 3,
-            # Top
-            4, 7, 6, 4, 6, 5,
-            # Front
-            0, 4, 5, 0, 5, 1,
-            # Back
-            2, 6, 7, 2, 7, 3,
-            # Left
-            0, 3, 7, 0, 7, 4,
-            # Right
-            1, 5, 6, 1, 6, 2,
-        ]
-
-        return vertices, indices
-
-    def generate_cylinder_vertices(self, radius, height, segments=16, offset_x=0, offset_y=0, offset_z=0):
-        """Generate vertices and indices for a cylinder"""
-        vertices = []
-        indices = []
-
-        x, y, z = offset_x, offset_y, offset_z
-        h = height / 2
-
-        # Bottom center
-        vertices.extend([x, y, z-h])
-        bottom_center = 0
-
-        # Top center
-        vertices.extend([x, y, z+h])
-        top_center = 1
-
-        # Bottom circle vertices
-        for i in range(segments):
-            angle = 2 * math.pi * i / segments
-            px = x + radius * math.cos(angle)
-            py = y + radius * math.sin(angle)
-            vertices.extend([px, py, z-h])
-
-        # Top circle vertices
-        for i in range(segments):
-            angle = 2 * math.pi * i / segments
-            px = x + radius * math.cos(angle)
-            py = y + radius * math.sin(angle)
-            vertices.extend([px, py, z+h])
-
-        # Bottom face triangles
-        for i in range(segments):
-            next_i = (i + 1) % segments
-            indices.extend([bottom_center, 2 + i, 2 + next_i])
-
-        # Top face triangles
-        for i in range(segments):
-            next_i = (i + 1) % segments
-            indices.extend([top_center, 2 + segments + next_i, 2 + segments + i])
-
-        # Side faces
-        for i in range(segments):
-            next_i = (i + 1) % segments
-            bottom1 = 2 + i
-            bottom2 = 2 + next_i
-            top1 = 2 + segments + i
-            top2 = 2 + segments + next_i
-
-            # Two triangles per side face
-            indices.extend([bottom1, top1, bottom2])
-            indices.extend([bottom2, top1, top2])
-
-        return vertices, indices
-
-    def create_shape_3d(self, build_step: BuildStep, repetition_index: int):
-        """Create a 3D shape from a build step"""
-        dims = build_step.dimensions
-
-        # Calculate Z offset for this repetition (stacking)
-        z_offset = repetition_index * self.layer_height
-
-        # Generate different colors for each repetition
-        base_color = (0.8, 0.6, 0.2)
-        color_variation = repetition_index * 0.1
-        color = (
-            min(1.0, base_color[0] + color_variation),
-            min(1.0, base_color[1] + color_variation * 0.5),
-            min(1.0, base_color[2] + color_variation * 0.3)
-        )
-
-        # Use layer height as the height for each layer
-        layer_height = self.layer_height
-
-        if build_step.shape_type == "square":
-            size = dims.get("size", 10)
-            vertices, indices = self.generate_box_vertices(size, size, layer_height, 0, 0, z_offset)
-            return Shape3D(vertices, indices, color)
-
-        elif build_step.shape_type == "rectangle":
-            width = dims.get("width", 10)
-            length = dims.get("length", 15)
-            vertices, indices = self.generate_box_vertices(width, length, layer_height, 0, 0, z_offset)
-            return Shape3D(vertices, indices, color)
-
-        elif build_step.shape_type == "circle":
-            diameter = dims.get("diameter", 10)
-            radius = diameter / 2
-            vertices, indices = self.generate_cylinder_vertices(radius, layer_height, 16, 0, 0, z_offset)
-            return Shape3D(vertices, indices, color)
-
-        elif build_step.shape_type == "ellipse":
-            # For ellipse, we'll create a scaled cylinder (simplified)
-            width = dims.get("width", 10)
-            length = dims.get("length", 15)
-            radius = max(width, length) / 2
-            vertices, indices = self.generate_cylinder_vertices(radius, layer_height, 24, 0, 0, z_offset)
-
-            # Scale vertices to create ellipse
-            vertices_array = np.array(vertices).reshape(-1, 3)
-            scale_x = width / (2 * radius)
-            scale_y = length / (2 * radius)
-
-            vertices_array[:, 0] *= scale_x
-            vertices_array[:, 1] *= scale_y
-
-            return Shape3D(vertices_array.flatten().tolist(), indices, color)
-
-        return None
+    def __init__(self, graphics_view):
+        self.graphics_view = graphics_view
+        self.scene = QGraphicsScene()
+        self.graphics_view.setScene(self.scene)
+        self.layer_height = 0.1
+        print("Simple 2D visualizer initialized successfully")
 
     def update_visualization(self, build_steps: list, layer_height: float = 0.1):
-        """Update the 3D visualization with new build steps"""
+        """Update the visualization with build steps"""
         self.layer_height = layer_height
-        self.shapes.clear()
+        self.scene.clear()
 
-        current_z = 0
+        if not build_steps:
+            # Show helpful message when no build steps
+            text_item = QGraphicsTextItem("No build steps defined.\nUse 'Add Step' button to create shapes.")
+            text_item.setPos(10, 10)
+            self.scene.addItem(text_item)
+            return
 
-        for build_step in build_steps:
-            # Create repetitions of each shape
+        current_y = 0
+        scale_factor = 5  # Scale factor for visualization
+
+        for step_index, build_step in enumerate(build_steps):
+            # Calculate total height for this build step
+            total_height = build_step.repetitions * layer_height
+
+            # Color variation for different steps
+            colors = [QColor(200, 150, 50), QColor(150, 200, 50), QColor(50, 150, 200), QColor(200, 50, 150)]
+            color = colors[step_index % len(colors)]
+
+            # Create shape representation
             for rep in range(build_step.repetitions):
-                shape = self.create_shape_3d(build_step, rep)
-                if shape:
-                    # Adjust position for stacking
-                    shape.vertices = np.array(shape.vertices).reshape(-1, 3)
-                    shape.vertices[:, 2] += current_z
-                    shape.vertices = shape.vertices.flatten()
-                    self.shapes.append(shape)
+                layer_y = current_y + (rep * layer_height * scale_factor)
 
-                current_z += layer_height
+                # Create shape based on type
+                if build_step.shape_type == "square":
+                    size = build_step.dimensions.get("size", 10) * scale_factor
+                    rect = QGraphicsRectItem(0, layer_y, size, layer_height * scale_factor)
+                    rect.setBrush(QBrush(color))
+                    rect.setPen(QPen(QColor(0, 0, 0), 1))
+                    self.scene.addItem(rect)
 
-        # Auto-adjust camera distance based on content
-        if self.shapes:
-            self.camera_distance = max(50, current_z * 2)
+                elif build_step.shape_type == "rectangle":
+                    width = build_step.dimensions.get("width", 10) * scale_factor
+                    length = build_step.dimensions.get("length", 15) * scale_factor
+                    rect = QGraphicsRectItem(0, layer_y, width, layer_height * scale_factor)
+                    rect.setBrush(QBrush(color))
+                    rect.setPen(QPen(QColor(0, 0, 0), 1))
+                    self.scene.addItem(rect)
 
-        self.update()
+                elif build_step.shape_type == "circle":
+                    diameter = build_step.dimensions.get("diameter", 10) * scale_factor
+                    ellipse = QGraphicsEllipseItem(0, layer_y, diameter, layer_height * scale_factor)
+                    ellipse.setBrush(QBrush(color))
+                    ellipse.setPen(QPen(QColor(0, 0, 0), 1))
+                    self.scene.addItem(ellipse)
 
-    def mousePressEvent(self, event):
-        """Handle mouse press for camera rotation"""
-        self.last_mouse_pos = event.position()
+                elif build_step.shape_type == "ellipse":
+                    width = build_step.dimensions.get("width", 10) * scale_factor
+                    length = build_step.dimensions.get("length", 15) * scale_factor
+                    ellipse = QGraphicsEllipseItem(0, layer_y, width, layer_height * scale_factor)
+                    ellipse.setBrush(QBrush(color))
+                    ellipse.setPen(QPen(QColor(0, 0, 0), 1))
+                    self.scene.addItem(ellipse)
 
-    def mouseMoveEvent(self, event):
-        """Handle mouse move for camera rotation"""
-        if hasattr(self, 'last_mouse_pos'):
-            dx = event.position().x() - self.last_mouse_pos.x()
-            dy = event.position().y() - self.last_mouse_pos.y()
+            # Add label for this build step
+            text = f"{build_step.shape_type.capitalize()}: {build_step.format_dimensions()}"
+            text_item = QGraphicsTextItem(text)
+            text_item.setPos(200, current_y + (total_height * scale_factor / 2))
+            self.scene.addItem(text_item)
 
-            self.camera_rotation_y += dx * 0.5
-            self.camera_rotation_x += dy * 0.5
+            current_y += total_height * scale_factor + 10  # Add spacing between steps
 
-            # Clamp rotation
-            self.camera_rotation_x = max(-90, min(90, self.camera_rotation_x))
-
-            self.last_mouse_pos = event.position()
-            self.update()
-
-    def wheelEvent(self, event):
-        """Handle mouse wheel for zoom"""
-        delta = event.angleDelta().y()
-        self.camera_distance += delta * 0.1
-        self.camera_distance = max(10, min(500, self.camera_distance))
-        self.update()
+        # Fit view to content
+        self.scene.setSceneRect(self.scene.itemsBoundingRect())
+        self.graphics_view.fitInView(self.scene.sceneRect(), 1)  # KeepAspectRatio
 
 
 class RecoaterDialog(QDialog):
@@ -909,34 +665,13 @@ class MainWindow(QMainWindow):
         # Initialize recoater settings
         self.recoater_settings = RecoaterSettings()
 
-        # Replace the graphics view with our 3D visualizer
+        # Initialize the simple build visualizer
         try:
-            self.visualizer_3d = Visualizer3D(self)
-
-            # Find the parent layout and replace the graphics view
-            graphics_parent = self.gview_visualizer.parent()
-            if graphics_parent and hasattr(graphics_parent, 'layout') and graphics_parent.layout():
-                parent_layout = graphics_parent.layout()
-                # Get the index of the graphics view in the layout
-                for i in range(parent_layout.count()):
-                    if parent_layout.itemAt(i).widget() == self.gview_visualizer:
-                        # Remove the old widget
-                        parent_layout.removeWidget(self.gview_visualizer)
-                        self.gview_visualizer.setParent(None)
-                        # Insert the new visualizer at the same position
-                        parent_layout.insertWidget(i, self.visualizer_3d)
-                        break
-
-                # Update reference
-                self.gview_visualizer = self.visualizer_3d
-                print("3D Visualizer integrated successfully")
-            else:
-                print("Could not find parent layout for graphics view")
-                self.visualizer_3d = None
-
+            self.build_visualizer = BuildVisualizer(self.gview_visualizer)
+            print("Build visualizer integrated successfully")
         except Exception as e:
-            print(f"Failed to initialize 3D visualizer: {e}")
-            self.visualizer_3d = None
+            print(f"Failed to initialize build visualizer: {e}")
+            self.build_visualizer = None
 
         # Connect line edit signals (editingFinished)
         self.le_spotsize.editingFinished.connect(self.on_beam_spot_size_changed)
@@ -999,11 +734,11 @@ class MainWindow(QMainWindow):
             return 0.1
 
     def update_visualizer(self):
-        """Update the 3D visualizer with current build steps and layer height"""
-        if hasattr(self, 'visualizer_3d') and self.visualizer_3d:
+        """Update the build visualizer with current build steps and layer height"""
+        if hasattr(self, 'build_visualizer') and self.build_visualizer:
             build_steps = self.get_current_build_steps()
             layer_height = self.get_layer_height()
-            self.visualizer_3d.update_visualization(build_steps, layer_height)
+            self.build_visualizer.update_visualization(build_steps, layer_height)
 
     # Line Edit dummy handlers
     def on_beam_spot_size_changed(self):
