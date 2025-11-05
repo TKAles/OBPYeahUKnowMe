@@ -14,6 +14,21 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Optional
 
+# OpenGL imports with error handling
+try:
+    from OpenGL.GL import (
+        glEnable, glDisable, glClear, glClearColor, glViewport,
+        glMatrixMode, glLoadIdentity, glFrustum, glTranslatef, glRotatef,
+        glColor3f, glEnableClientState, glDisableClientState, glVertexPointer,
+        glDrawElements, GL_DEPTH_TEST, GL_CULL_FACE, GL_COLOR_BUFFER_BIT,
+        GL_DEPTH_BUFFER_BIT, GL_PROJECTION, GL_MODELVIEW, GL_VERTEX_ARRAY,
+        GL_TRIANGLES, GL_FLOAT, GL_UNSIGNED_INT
+    )
+    OPENGL_AVAILABLE = True
+except ImportError:
+    OPENGL_AVAILABLE = False
+    print("OpenGL not available - 3D visualization will be disabled")
+
 
 @dataclass
 class RecoaterSettings:
@@ -527,36 +542,33 @@ class Visualizer3D(QOpenGLWidget):
 
     def initializeGL(self):
         """Initialize OpenGL"""
-        try:
-            from OpenGL.GL import *
-            self.gl = GL
-
-            # Enable depth testing
-            glEnable(GL_DEPTH_TEST)
-            glEnable(GL_CULL_FACE)
-
-            # Set background color (dark gray)
-            glClearColor(0.2, 0.2, 0.2, 1.0)
-
-            print("3D Visualizer initialized successfully")
-        except ImportError:
+        if not OPENGL_AVAILABLE:
             print("OpenGL not available - 3D visualization disabled")
-            self.gl = None
+            return
+
+        # Enable depth testing
+        glEnable(GL_DEPTH_TEST)
+        glEnable(GL_CULL_FACE)
+
+        # Set background color (dark gray)
+        glClearColor(0.2, 0.2, 0.2, 1.0)
+
+        print("3D Visualizer initialized successfully")
 
     def resizeGL(self, w, h):
         """Handle window resize"""
-        if not self.gl:
+        if not OPENGL_AVAILABLE:
             return
 
-        self.gl.glViewport(0, 0, w, h)
+        glViewport(0, 0, w, h)
 
     def paintGL(self):
         """Render the 3D scene"""
-        if not self.gl:
+        if not OPENGL_AVAILABLE:
             return
 
         # Clear screen and depth buffer
-        self.gl.glClear(self.gl.GL_COLOR_BUFFER_BIT | self.gl.GL_DEPTH_BUFFER_BIT)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         # Set up matrices
         self.setup_matrices()
@@ -567,12 +579,12 @@ class Visualizer3D(QOpenGLWidget):
 
     def setup_matrices(self):
         """Setup projection and view matrices"""
-        if not self.gl:
+        if not OPENGL_AVAILABLE:
             return
 
         # Setup projection matrix
-        self.gl.glMatrixMode(self.gl.GL_PROJECTION)
-        self.gl.glLoadIdentity()
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
 
         # Perspective projection
         width = self.width()
@@ -589,35 +601,35 @@ class Visualizer3D(QOpenGLWidget):
         right = top * aspect
         left = -right
 
-        self.gl.glFrustum(left, right, bottom, top, near, far)
+        glFrustum(left, right, bottom, top, near, far)
 
         # Setup model-view matrix
-        self.gl.glMatrixMode(self.gl.GL_MODELVIEW)
-        self.gl.glLoadIdentity()
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
 
         # Camera positioning
-        self.gl.glTranslatef(0, 0, -self.camera_distance)
-        self.gl.glRotatef(self.camera_rotation_x, 1, 0, 0)
-        self.gl.glRotatef(self.camera_rotation_y, 0, 1, 0)
+        glTranslatef(0, 0, -self.camera_distance)
+        glRotatef(self.camera_rotation_x, 1, 0, 0)
+        glRotatef(self.camera_rotation_y, 0, 1, 0)
 
     def render_shape(self, shape):
         """Render a single shape"""
-        if not self.gl:
+        if not OPENGL_AVAILABLE:
             return
 
         # Set color
-        self.gl.glColor3f(*shape.color)
+        glColor3f(*shape.color)
 
         # Enable vertex arrays
-        self.gl.glEnableClientState(self.gl.GL_VERTEX_ARRAY)
-        self.gl.glVertexPointer(3, self.gl.GL_FLOAT, 0, shape.vertices)
+        glEnableClientState(GL_VERTEX_ARRAY)
+        glVertexPointer(3, GL_FLOAT, 0, shape.vertices)
 
         # Draw triangles
-        self.gl.glDrawElements(self.gl.GL_TRIANGLES, len(shape.indices),
-                             self.gl.GL_UNSIGNED_INT, shape.indices)
+        glDrawElements(GL_TRIANGLES, len(shape.indices),
+                      GL_UNSIGNED_INT, shape.indices)
 
         # Disable vertex arrays
-        self.gl.glDisableClientState(self.gl.GL_VERTEX_ARRAY)
+        glDisableClientState(GL_VERTEX_ARRAY)
 
     def generate_box_vertices(self, width, length, height, offset_x=0, offset_y=0, offset_z=0):
         """Generate vertices and indices for a box"""
