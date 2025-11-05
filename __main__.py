@@ -561,6 +561,10 @@ class Visualizer3D(QOpenGLWidget):
     def paintGL(self):
         """Render the 3D scene"""
         if not OPENGL_AVAILABLE:
+            # Draw a simple fallback message
+            from PyQt6.QtGui import QPainter
+            painter = QPainter(self)
+            painter.drawText(self.rect(), 1, "3D Visualization requires OpenGL")
             return
 
         # Clear screen and depth buffer
@@ -908,13 +912,28 @@ class MainWindow(QMainWindow):
         # Replace the graphics view with our 3D visualizer
         try:
             self.visualizer_3d = Visualizer3D(self)
-            # Remove the existing graphics view and replace with 3D visualizer
-            layout = self.gview_visualizer.parent().layout()
-            if layout:
-                layout.replaceWidget(self.gview_visualizer, self.visualizer_3d)
-                self.gview_visualizer.setParent(None)
+
+            # Find the parent layout and replace the graphics view
+            graphics_parent = self.gview_visualizer.parent()
+            if graphics_parent and hasattr(graphics_parent, 'layout') and graphics_parent.layout():
+                parent_layout = graphics_parent.layout()
+                # Get the index of the graphics view in the layout
+                for i in range(parent_layout.count()):
+                    if parent_layout.itemAt(i).widget() == self.gview_visualizer:
+                        # Remove the old widget
+                        parent_layout.removeWidget(self.gview_visualizer)
+                        self.gview_visualizer.setParent(None)
+                        # Insert the new visualizer at the same position
+                        parent_layout.insertWidget(i, self.visualizer_3d)
+                        break
+
+                # Update reference
                 self.gview_visualizer = self.visualizer_3d
-            print("3D Visualizer integrated successfully")
+                print("3D Visualizer integrated successfully")
+            else:
+                print("Could not find parent layout for graphics view")
+                self.visualizer_3d = None
+
         except Exception as e:
             print(f"Failed to initialize 3D visualizer: {e}")
             self.visualizer_3d = None
@@ -943,6 +962,21 @@ class MainWindow(QMainWindow):
 
         # Connect layer height changes to visualizer update
         self.le_layerheight.textChanged.connect(self.update_visualizer)
+
+        # Set default values
+        self.set_default_values()
+
+    def set_default_values(self):
+        """Set sane default values for the UI"""
+        # Set beam parameters
+        self.le_spotsize.setText("100")  # Spot size 100 microns
+        self.le_beampower.setText("100")  # Power 100 watts
+        self.le_layerheight.setText("0.1")  # Layer height 0.1 mm
+
+        # Clear existing build steps from the UI file
+        self.build_step_list.clear()
+
+        print("Default values set: Spot Size=100μm, Power=100W, Layer Height=0.1mm")
 
     def get_current_build_steps(self):
         """Get all build steps from the list widget"""
