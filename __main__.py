@@ -4,11 +4,23 @@ Main application entry point for OBP Yeah U Know Me
 
 import sys
 from PyQt6 import QtWidgets, uic
-from PyQt6.QtWidgets import QMainWindow, QDialog, QWizard, QWizardPage, QVBoxLayout, QHBoxLayout, QRadioButton, QLabel, QLineEdit, QButtonGroup, QListWidgetItem, QPushButton, QComboBox, QMessageBox, QGraphicsScene, QGraphicsRectItem, QGraphicsEllipseItem, QGraphicsTextItem
-from PyQt6.QtCore import QTimer, QRectF, Qt
+from PyQt6.QtWidgets import QMainWindow, QDialog, QWizard, QWizardPage, QVBoxLayout, QHBoxLayout, QRadioButton, QLabel, QLineEdit, QButtonGroup, QListWidgetItem, QPushButton, QComboBox, QMessageBox
+from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QBrush, QColor, QPen
 import math
 import numpy as np
+
+# Matplotlib for 3D visualization
+try:
+    import matplotlib.pyplot as plt
+    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+    from matplotlib.figure import Figure
+    from mpl_toolkits.mplot3d import Axes3D
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
+    print("Matplotlib not available - using fallback visualization")
 from dataclasses import dataclass
 from typing import Optional
 
@@ -497,85 +509,183 @@ class EditBuildStepDialog(QDialog):
         return self.current_build_step
 
 
-class BuildVisualizer:
-    """Simple 2D visualizer for build steps using QGraphicsView"""
+class Build3DVisualizer(FigureCanvas):
+    """3D visualizer for build steps using matplotlib"""
 
-    def __init__(self, graphics_view):
-        self.graphics_view = graphics_view
-        self.scene = QGraphicsScene()
-        self.graphics_view.setScene(self.scene)
-        self.layer_height = 0.1
-        print("Simple 2D visualizer initialized successfully")
-
-    def update_visualization(self, build_steps: list, layer_height: float = 0.1):
-        """Update the visualization with build steps"""
-        self.layer_height = layer_height
-        self.scene.clear()
-
-        if not build_steps:
-            # Show helpful message when no build steps
-            text_item = QGraphicsTextItem("No build steps defined.\nUse 'Add Step' button to create shapes.")
-            text_item.setPos(10, 10)
-            self.scene.addItem(text_item)
+    def __init__(self, parent=None):
+        if not MATPLOTLIB_AVAILABLE:
+            # Fallback to simple widget
+            super(FigureCanvas, self).__init__()
             return
 
-        current_y = 0
-        scale_factor = 5  # Scale factor for visualization
+        self.figure = Figure(figsize=(8, 6), dpi=100)
+        super().__init__(self.figure)
+        self.setParent(parent)
+
+        # Create 3D subplot
+        self.ax = self.figure.add_subplot(111, projection='3d')
+        self.layer_height = 0.1
+
+        # Set up the plot
+        self.ax.set_xlabel('X (mm)')
+        self.ax.set_ylabel('Y (mm)')
+        self.ax.set_zlabel('Z (mm)')
+        self.ax.set_title('Build Visualization')
+
+        print("3D matplotlib visualizer initialized successfully")
+
+    def create_box_vertices(self, width, length, height, offset_x=0, offset_y=0, offset_z=0):
+        """Create vertices for a 3D box"""
+        w, l, h = width/2, length/2, height/2
+        x, y, z = offset_x, offset_y, offset_z
+
+        # Define the vertices of the box
+        vertices = [
+            [x-w, y-l, z-h], [x+w, y-l, z-h], [x+w, y+l, z-h], [x-w, y+l, z-h],  # bottom
+            [x-w, y-l, z+h], [x+w, y-l, z+h], [x+w, y+l, z+h], [x-w, y+l, z+h]   # top
+        ]
+
+        # Define the 6 faces of the box
+        faces = [
+            [vertices[0], vertices[1], vertices[2], vertices[3]],  # bottom
+            [vertices[4], vertices[7], vertices[6], vertices[5]],  # top
+            [vertices[0], vertices[4], vertices[5], vertices[1]],  # front
+            [vertices[2], vertices[6], vertices[7], vertices[3]],  # back
+            [vertices[0], vertices[3], vertices[7], vertices[4]],  # left
+            [vertices[1], vertices[5], vertices[6], vertices[2]]   # right
+        ]
+
+        return faces
+
+    def create_cylinder_faces(self, radius, height, segments=16, offset_x=0, offset_y=0, offset_z=0):
+        """Create faces for a 3D cylinder"""
+        faces = []
+        x, y, z = offset_x, offset_y, offset_z
+        h = height / 2
+
+        # Create bottom and top circles
+        bottom_circle = []
+        top_circle = []
+
+        for i in range(segments):
+            angle = 2 * math.pi * i / segments
+            px = x + radius * math.cos(angle)
+            py = y + radius * math.sin(angle)
+            bottom_circle.append([px, py, z - h])
+            top_circle.append([px, py, z + h])
+
+        # Add bottom and top faces
+        faces.append(bottom_circle)
+        faces.append(top_circle[::-1])  # Reverse for correct normal
+
+        # Add side faces
+        for i in range(segments):
+            next_i = (i + 1) % segments
+            face = [
+                bottom_circle[i],
+                bottom_circle[next_i],
+                top_circle[next_i],
+                top_circle[i]
+            ]
+            faces.append(face)
+
+        return faces
+
+    def update_visualization(self, build_steps: list, layer_height: float = 0.1):
+        """Update the 3D visualization with build steps"""
+        if not MATPLOTLIB_AVAILABLE:
+            return
+
+        self.layer_height = layer_height
+        self.ax.clear()
+
+        # Set up the plot
+        self.ax.set_xlabel('X (mm)')
+        self.ax.set_ylabel('Y (mm)')
+        self.ax.set_zlabel('Z (mm)')
+        self.ax.set_title('Build Visualization')
+
+        if not build_steps:
+            self.ax.text(0, 0, 0, "No build steps defined.\nUse 'Add Step' button to create shapes.",
+                        fontsize=12, ha='center')
+            self.draw()
+            return
+
+        current_z = 0
+        colors = ['gold', 'lightgreen', 'lightblue', 'lightcoral', 'plum', 'orange']
 
         for step_index, build_step in enumerate(build_steps):
-            # Calculate total height for this build step
-            total_height = build_step.repetitions * layer_height
-
-            # Color variation for different steps
-            colors = [QColor(200, 150, 50), QColor(150, 200, 50), QColor(50, 150, 200), QColor(200, 50, 150)]
             color = colors[step_index % len(colors)]
+            dims = build_step.dimensions
 
-            # Create shape representation
+            # Create each repetition
             for rep in range(build_step.repetitions):
-                layer_y = current_y + (rep * layer_height * scale_factor)
+                z_offset = current_z + (layer_height / 2)
 
-                # Create shape based on type
                 if build_step.shape_type == "square":
-                    size = build_step.dimensions.get("size", 10) * scale_factor
-                    rect = QGraphicsRectItem(0, layer_y, size, layer_height * scale_factor)
-                    rect.setBrush(QBrush(color))
-                    rect.setPen(QPen(QColor(0, 0, 0), 1))
-                    self.scene.addItem(rect)
+                    size = dims.get("size", 10)
+                    faces = self.create_box_vertices(size, size, layer_height, 0, 0, z_offset)
+                    poly3d = Poly3DCollection(faces, alpha=0.8, facecolor=color, edgecolor='black')
+                    self.ax.add_collection3d(poly3d)
 
                 elif build_step.shape_type == "rectangle":
-                    width = build_step.dimensions.get("width", 10) * scale_factor
-                    length = build_step.dimensions.get("length", 15) * scale_factor
-                    rect = QGraphicsRectItem(0, layer_y, width, layer_height * scale_factor)
-                    rect.setBrush(QBrush(color))
-                    rect.setPen(QPen(QColor(0, 0, 0), 1))
-                    self.scene.addItem(rect)
+                    width = dims.get("width", 10)
+                    length = dims.get("length", 15)
+                    faces = self.create_box_vertices(width, length, layer_height, 0, 0, z_offset)
+                    poly3d = Poly3DCollection(faces, alpha=0.8, facecolor=color, edgecolor='black')
+                    self.ax.add_collection3d(poly3d)
 
                 elif build_step.shape_type == "circle":
-                    diameter = build_step.dimensions.get("diameter", 10) * scale_factor
-                    ellipse = QGraphicsEllipseItem(0, layer_y, diameter, layer_height * scale_factor)
-                    ellipse.setBrush(QBrush(color))
-                    ellipse.setPen(QPen(QColor(0, 0, 0), 1))
-                    self.scene.addItem(ellipse)
+                    diameter = dims.get("diameter", 10)
+                    radius = diameter / 2
+                    faces = self.create_cylinder_faces(radius, layer_height, 16, 0, 0, z_offset)
+                    poly3d = Poly3DCollection(faces, alpha=0.8, facecolor=color, edgecolor='black')
+                    self.ax.add_collection3d(poly3d)
 
                 elif build_step.shape_type == "ellipse":
-                    width = build_step.dimensions.get("width", 10) * scale_factor
-                    length = build_step.dimensions.get("length", 15) * scale_factor
-                    ellipse = QGraphicsEllipseItem(0, layer_y, width, layer_height * scale_factor)
-                    ellipse.setBrush(QBrush(color))
-                    ellipse.setPen(QPen(QColor(0, 0, 0), 1))
-                    self.scene.addItem(ellipse)
+                    width = dims.get("width", 10)
+                    length = dims.get("length", 15)
+                    # Use larger radius and scale for ellipse
+                    radius = max(width, length) / 2
+                    faces = self.create_cylinder_faces(radius, layer_height, 24, 0, 0, z_offset)
 
-            # Add label for this build step
-            text = f"{build_step.shape_type.capitalize()}: {build_step.format_dimensions()}"
-            text_item = QGraphicsTextItem(text)
-            text_item.setPos(200, current_y + (total_height * scale_factor / 2))
-            self.scene.addItem(text_item)
+                    # Scale faces to create ellipse
+                    scale_x = width / (2 * radius)
+                    scale_y = length / (2 * radius)
 
-            current_y += total_height * scale_factor + 10  # Add spacing between steps
+                    scaled_faces = []
+                    for face in faces:
+                        scaled_face = []
+                        for vertex in face:
+                            scaled_vertex = [vertex[0] * scale_x, vertex[1] * scale_y, vertex[2]]
+                            scaled_face.append(scaled_vertex)
+                        scaled_faces.append(scaled_face)
 
-        # Fit view to content
-        self.scene.setSceneRect(self.scene.itemsBoundingRect())
-        self.graphics_view.fitInView(self.scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
+                    poly3d = Poly3DCollection(scaled_faces, alpha=0.8, facecolor=color, edgecolor='black')
+                    self.ax.add_collection3d(poly3d)
+
+                current_z += layer_height
+
+        # Set axis limits and aspect ratio
+        if build_steps:
+            max_dim = 0
+            for build_step in build_steps:
+                dims = build_step.dimensions
+                if build_step.shape_type == "square":
+                    max_dim = max(max_dim, dims.get("size", 10))
+                elif build_step.shape_type in ["rectangle", "ellipse"]:
+                    max_dim = max(max_dim, dims.get("width", 10), dims.get("length", 15))
+                elif build_step.shape_type == "circle":
+                    max_dim = max(max_dim, dims.get("diameter", 10))
+
+            limit = max_dim / 2 * 1.2
+            self.ax.set_xlim([-limit, limit])
+            self.ax.set_ylim([-limit, limit])
+            self.ax.set_zlim([0, current_z * 1.1])
+
+        # Set viewing angle
+        self.ax.view_init(elev=30, azim=45)
+        self.draw()
 
 
 class RecoaterDialog(QDialog):
@@ -665,12 +775,37 @@ class MainWindow(QMainWindow):
         # Initialize recoater settings
         self.recoater_settings = RecoaterSettings()
 
-        # Initialize the simple build visualizer
+        # Initialize the 3D build visualizer
         try:
-            self.build_visualizer = BuildVisualizer(self.gview_visualizer)
-            print("Build visualizer integrated successfully")
+            if MATPLOTLIB_AVAILABLE:
+                self.build_visualizer = Build3DVisualizer(self)
+
+                # Replace the graphics view with matplotlib widget
+                graphics_parent = self.gview_visualizer.parent()
+                if graphics_parent and hasattr(graphics_parent, 'layout') and graphics_parent.layout():
+                    parent_layout = graphics_parent.layout()
+                    # Get the index of the graphics view in the layout
+                    for i in range(parent_layout.count()):
+                        if parent_layout.itemAt(i).widget() == self.gview_visualizer:
+                            # Remove the old widget
+                            parent_layout.removeWidget(self.gview_visualizer)
+                            self.gview_visualizer.setParent(None)
+                            # Insert the new visualizer at the same position
+                            parent_layout.insertWidget(i, self.build_visualizer)
+                            break
+
+                    # Update reference
+                    self.gview_visualizer = self.build_visualizer
+                    print("3D matplotlib visualizer integrated successfully")
+                else:
+                    print("Could not find parent layout for graphics view")
+                    self.build_visualizer = None
+            else:
+                print("Matplotlib not available - 3D visualization disabled")
+                self.build_visualizer = None
+
         except Exception as e:
-            print(f"Failed to initialize build visualizer: {e}")
+            print(f"Failed to initialize 3D visualizer: {e}")
             self.build_visualizer = None
 
         # Connect line edit signals (editingFinished)
@@ -682,6 +817,9 @@ class MainWindow(QMainWindow):
         self.btn_add_buildstep.clicked.connect(self.on_add_step_clicked)
         self.btn_edit_buildstep.clicked.connect(self.on_edit_step_clicked)
         self.btn_del_buildstep.clicked.connect(self.on_delete_step_clicked)
+
+        # Add move up/down buttons programmatically
+        self.add_move_buttons()
         self.btn_recoater_settings.clicked.connect(self.on_view_recoater_settings_clicked)
         self.btn_genpackage.clicked.connect(self.on_generate_build_package_clicked)
 
@@ -712,6 +850,30 @@ class MainWindow(QMainWindow):
         self.build_step_list.clear()
 
         print("Default values set: Spot Size=100μm, Power=100W, Layer Height=0.1mm")
+
+    def add_move_buttons(self):
+        """Add move up/down buttons to the build step button layout"""
+        try:
+            # Find the horizontal layout containing the build step buttons
+            button_layout = self.btn_add_buildstep.parent().layout()
+            if button_layout:
+                # Create move up and down buttons
+                self.btn_move_up = QPushButton("Move Up")
+                self.btn_move_down = QPushButton("Move Down")
+
+                # Add buttons to the layout
+                button_layout.addWidget(self.btn_move_up)
+                button_layout.addWidget(self.btn_move_down)
+
+                # Connect signals
+                self.btn_move_up.clicked.connect(self.on_move_up_clicked)
+                self.btn_move_down.clicked.connect(self.on_move_down_clicked)
+
+                print("Move up/down buttons added successfully")
+            else:
+                print("Could not find button layout")
+        except Exception as e:
+            print(f"Failed to add move buttons: {e}")
 
     def get_current_build_steps(self):
         """Get all build steps from the list widget"""
@@ -844,6 +1006,46 @@ class MainWindow(QMainWindow):
             del removed_item
         else:
             print("Delete build step cancelled")
+
+    def on_move_up_clicked(self):
+        """Handle Move Up button clicked"""
+        current_row = self.build_step_list.currentRow()
+        if current_row <= 0:
+            QMessageBox.information(self, "Cannot Move", "Cannot move the first item up or no item selected.")
+            return
+
+        # Get the current item
+        current_item = self.build_step_list.takeItem(current_row)
+        if current_item:
+            # Insert it one position up
+            self.build_step_list.insertItem(current_row - 1, current_item)
+            self.build_step_list.setCurrentRow(current_row - 1)
+
+            # Update visualizer
+            self.update_visualizer()
+
+            print(f"Moved build step up: {current_item.text()}")
+
+    def on_move_down_clicked(self):
+        """Handle Move Down button clicked"""
+        current_row = self.build_step_list.currentRow()
+        total_items = self.build_step_list.count()
+
+        if current_row < 0 or current_row >= total_items - 1:
+            QMessageBox.information(self, "Cannot Move", "Cannot move the last item down or no item selected.")
+            return
+
+        # Get the current item
+        current_item = self.build_step_list.takeItem(current_row)
+        if current_item:
+            # Insert it one position down
+            self.build_step_list.insertItem(current_row + 1, current_item)
+            self.build_step_list.setCurrentRow(current_row + 1)
+
+            # Update visualizer
+            self.update_visualizer()
+
+            print(f"Moved build step down: {current_item.text()}")
 
     def on_view_recoater_settings_clicked(self):
         """Handle View Recoater Blade Settings button clicked"""
