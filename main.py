@@ -5,7 +5,7 @@ OBP Yeah You Know Me - Main Application
 """
 
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QGraphicsView, QSizePolicy
 from PyQt6 import uic
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -117,23 +117,45 @@ class MainWindow(QMainWindow):
     def setup_matplotlib_canvas(self):
         """Replace the QGraphicsView with a matplotlib canvas"""
         # Find the graphics view widget
-        graphics_view = self.findChild(QWidget, 'graphicsView')
+        graphics_view = self.findChild(QGraphicsView, 'graphicsView')
 
         if graphics_view:
-            # Get the parent layout
-            parent_layout = graphics_view.parent().layout()
+            # Get the parent widget and its layout
+            parent_widget = graphics_view.parentWidget()
+            parent_layout = parent_widget.layout()
 
-            # Find the index of the graphics view in the layout
-            for i in range(parent_layout.count()):
-                if parent_layout.itemAt(i).widget() == graphics_view:
+            if parent_layout:
+                # Find the index and properties of the graphics view in the layout
+                layout_index = -1
+                stretch = 0
+
+                for i in range(parent_layout.count()):
+                    item = parent_layout.itemAt(i)
+                    if item.widget() == graphics_view:
+                        layout_index = i
+                        # Get stretch factor if it's a box layout
+                        if hasattr(parent_layout, 'stretch'):
+                            stretch = parent_layout.stretch(i)
+                        break
+
+                if layout_index >= 0:
                     # Remove the old widget
                     parent_layout.removeWidget(graphics_view)
+                    graphics_view.setParent(None)
                     graphics_view.deleteLater()
 
-                    # Create and add the matplotlib canvas
-                    self.canvas = MatplotlibCanvas(self, width=8, height=6, dpi=100)
-                    parent_layout.insertWidget(i, self.canvas)
-                    break
+                    # Create the matplotlib canvas
+                    self.canvas = MatplotlibCanvas(parent_widget, width=8, height=6, dpi=100)
+
+                    # Set size policy to expand and fill available space
+                    self.canvas.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+                    # Insert the canvas at the same position with stretch
+                    parent_layout.insertWidget(layout_index, self.canvas, stretch if stretch > 0 else 1)
+                else:
+                    print("Warning: Could not find graphicsView in parent layout")
+            else:
+                print("Warning: Parent widget has no layout")
         else:
             print("Warning: graphicsView not found in UI")
 
