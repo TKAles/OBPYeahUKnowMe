@@ -1,6 +1,8 @@
 # OBP Yeah You Know Me
 
-3D Additive Manufacturing Build Package Generator
+3D Additive Manufacturing Build Package Generator for OpenMelt based systems.
+
+WARNING: AI assisted/generated code is present in this repository. Mainly for UI and other boring tasks. If you are philoshopically opposed to this run away now.
 
 ## Overview
 
