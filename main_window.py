@@ -118,7 +118,13 @@ class MainWindow(QMainWindow):
     def on_add_step_clicked(self):
         """Handle Add Step button clicked"""
         print("Opening Add Build Step wizard")
-        wizard = BuildStepWizard(self)
+        # Get current spot size
+        try:
+            spot_size_microns = float(self.le_spotsize.text())
+        except (ValueError, AttributeError):
+            spot_size_microns = 100.0  # Default if invalid
+
+        wizard = BuildStepWizard(self, spot_size_microns)
         result = wizard.exec()
 
         if result == QWizard.DialogCode.Accepted:
@@ -152,8 +158,14 @@ class MainWindow(QMainWindow):
 
         print(f"Editing build step: {current_item.text()}")
 
+        # Get current spot size
+        try:
+            spot_size_microns = float(self.le_spotsize.text())
+        except (ValueError, AttributeError):
+            spot_size_microns = 100.0  # Default if invalid
+
         # Create and show the edit dialog
-        dialog = EditBuildStepDialog(self, build_step)
+        dialog = EditBuildStepDialog(self, build_step, spot_size_microns)
         result = dialog.exec()
 
         if result == QDialog.DialogCode.Accepted:

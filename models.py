@@ -29,7 +29,8 @@ class BuildStep:
 
     # Hatching parameters
     hatching_enabled: bool = False
-    hatch_spacing: float = 0.1  # mm - distance between hatch lines
+    hatch_spacing: float = 0.1  # mm - distance between hatch lines (calculated from multiplier * spot_size)
+    hatch_spacing_multiplier: float = 1.0  # multiplier for beam spot size (1.0 = spacing equals spot size)
     hatch_angle: float = 0.0  # degrees - rotation of hatch pattern
     hatch_pattern: str = "linear"  # "linear" or "crosshatch"
 
@@ -53,6 +54,17 @@ class BuildStep:
         """Calculate total build height from repetitions and layer height"""
         return self.repetitions * layer_height
 
+    def calculate_hatch_spacing(self, spot_size_microns: float) -> float:
+        """
+        Calculate actual hatch spacing from spot size and multiplier.
+        Args:
+            spot_size_microns: Beam spot size in microns
+        Returns:
+            Hatch spacing in mm
+        """
+        spot_size_mm = spot_size_microns / 1000.0  # Convert microns to mm
+        return spot_size_mm * self.hatch_spacing_multiplier
+
     def to_list_item_text(self) -> str:
         """Format as list item text"""
         offset_str = f"@({self.x_offset:.1f},{self.y_offset:.1f})" if (self.x_offset != 0 or self.y_offset != 0) else "@(0,0)"
@@ -62,7 +74,7 @@ class BuildStep:
         if layer_str:
             base_text += f" | {layer_str}"
         if self.hatching_enabled:
-            base_text += f" | Hatch: {self.hatch_spacing}mm@{self.hatch_angle}°"
+            base_text += f" | Hatch: {self.hatch_spacing_multiplier}x@{self.hatch_angle}°"
         return base_text
 
     @classmethod
@@ -128,14 +140,23 @@ class BuildStep:
             # Return default if parsing fails
             return cls()
 
-    def generate_hatch_lines(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    def generate_hatch_lines(self, spot_size_microns: float = 100.0) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
         """
         Generate hatch lines as (start_point, end_point) pairs.
-        Returns list of tuples: [((x1, y1), (x2, y2)), ...]
-        Points are in absolute coordinates including offsets.
+        Args:
+            spot_size_microns: Beam spot size in microns (default 100)
+        Returns:
+            List of tuples: [((x1, y1), (x2, y2)), ...]
+            Points are in absolute coordinates including offsets.
         """
         if not self.hatching_enabled:
             return []
+
+        # Calculate actual hatch spacing from spot size and multiplier
+        actual_spacing = self.calculate_hatch_spacing(spot_size_microns)
+
+        # Store the calculated spacing for use in generation methods
+        self._actual_hatch_spacing = actual_spacing
 
         # Generate primary hatch lines
         lines = self._generate_hatch_lines_at_angle(self.hatch_angle)
@@ -181,7 +202,8 @@ class BuildStep:
     def _generate_rectangle_hatches(self, width: float, height: float, angle_deg: float) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
         """Generate hatch lines for a rectangle at a given angle"""
         lines = []
-        if width <= 0 or height <= 0 or self.hatch_spacing <= 0:
+        spacing = getattr(self, '_actual_hatch_spacing', self.hatch_spacing)
+        if width <= 0 or height <= 0 or spacing <= 0:
             return lines
 
         angle_rad = math.radians(angle_deg)
@@ -193,12 +215,12 @@ class BuildStep:
 
         # Generate parallel lines perpendicular to the hatch angle
         # Start from beyond the shape and sweep across
-        num_lines = int(diagonal / self.hatch_spacing) + 2
+        num_lines = int(diagonal / spacing) + 2
         start_offset = -diagonal / 2
 
         for i in range(num_lines):
             # Distance along perpendicular to hatch direction
-            offset = start_offset + i * self.hatch_spacing
+            offset = start_offset + i * spacing
 
             # Line passes through point at offset distance from center
             # perpendicular to hatch direction
@@ -225,7 +247,8 @@ class BuildStep:
     def _generate_circle_hatches(self, diameter: float, angle_deg: float) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
         """Generate hatch lines for a circle at a given angle"""
         lines = []
-        if diameter <= 0 or self.hatch_spacing <= 0:
+        spacing = getattr(self, '_actual_hatch_spacing', self.hatch_spacing)
+        if diameter <= 0 or spacing <= 0:
             return lines
 
         radius = diameter / 2
@@ -234,12 +257,12 @@ class BuildStep:
         sin_a = math.sin(angle_rad)
 
         # Generate parallel lines
-        num_lines = int(diameter / self.hatch_spacing) + 2
-        start_offset = -radius - self.hatch_spacing
+        num_lines = int(diameter / spacing) + 2
+        start_offset = -radius - spacing
 
         for i in range(num_lines):
             # Perpendicular distance from center
-            offset = start_offset + i * self.hatch_spacing
+            offset = start_offset + i * spacing
 
             # Skip if line doesn't intersect circle
             if abs(offset) >= radius:
@@ -269,7 +292,8 @@ class BuildStep:
     def _generate_ellipse_hatches(self, width: float, height: float, angle_deg: float) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
         """Generate hatch lines for an ellipse at a given angle"""
         lines = []
-        if width <= 0 or height <= 0 or self.hatch_spacing <= 0:
+        spacing = getattr(self, '_actual_hatch_spacing', self.hatch_spacing)
+        if width <= 0 or height <= 0 or spacing <= 0:
             return lines
 
         a = width / 2  # Semi-major axis (assuming width is along x)
@@ -281,11 +305,11 @@ class BuildStep:
 
         # Use bounding box diagonal for range
         diagonal = math.sqrt(width**2 + height**2)
-        num_lines = int(diagonal / self.hatch_spacing) + 2
+        num_lines = int(diagonal / spacing) + 2
         start_offset = -diagonal / 2
 
         for i in range(num_lines):
-            offset = start_offset + i * self.hatch_spacing
+            offset = start_offset + i * spacing
 
             # For an ellipse, we need to find intersection of line with ellipse
             # Line: perpendicular distance 'offset' from center, direction (cos_a, sin_a)

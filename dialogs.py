@@ -12,11 +12,12 @@ from models import BuildStep, RecoaterSettings
 class EditBuildStepDialog(QDialog):
     """Dialog for editing existing build steps"""
 
-    def __init__(self, parent=None, build_step: Optional[BuildStep] = None):
+    def __init__(self, parent=None, build_step: Optional[BuildStep] = None, spot_size_microns: float = 100.0):
         super().__init__(parent)
         self.setWindowTitle("Edit Build Step")
         self.setModal(True)
         self.resize(400, 300)
+        self.spot_size_microns = spot_size_microns
 
         # Store the original build step
         self.original_build_step = build_step or BuildStep()
@@ -29,6 +30,7 @@ class EditBuildStepDialog(QDialog):
             starting_layer=self.original_build_step.starting_layer,
             hatching_enabled=self.original_build_step.hatching_enabled,
             hatch_spacing=self.original_build_step.hatch_spacing,
+            hatch_spacing_multiplier=self.original_build_step.hatch_spacing_multiplier,
             hatch_angle=self.original_build_step.hatch_angle,
             hatch_pattern=self.original_build_step.hatch_pattern
         )
@@ -102,15 +104,25 @@ class EditBuildStepDialog(QDialog):
         self.enable_hatching.toggled.connect(self.on_hatching_toggled)
         layout.addWidget(self.enable_hatching)
 
-        # Hatch spacing field
+        # Hatch spacing multiplier field
         spacing_layout = QHBoxLayout()
-        spacing_layout.addWidget(QLabel("Hatch Spacing:"))
-        self.hatch_spacing_edit = QLineEdit()
-        self.hatch_spacing_edit.setEnabled(False)
-        spacing_layout.addWidget(self.hatch_spacing_edit)
-        spacing_layout.addWidget(QLabel("[mm]"))
+        spacing_layout.addWidget(QLabel("Hatch Spacing Multiplier:"))
+        self.hatch_spacing_multiplier_edit = QLineEdit()
+        self.hatch_spacing_multiplier_edit.setEnabled(False)
+        self.hatch_spacing_multiplier_edit.textChanged.connect(self.update_calculated_spacing)
+        spacing_layout.addWidget(self.hatch_spacing_multiplier_edit)
+        spacing_layout.addWidget(QLabel("x spot size"))
         spacing_layout.addStretch()
         layout.addLayout(spacing_layout)
+
+        # Calculated spacing display (read-only)
+        calc_spacing_layout = QHBoxLayout()
+        calc_spacing_layout.addWidget(QLabel("Calculated Spacing:"))
+        self.calculated_spacing_label = QLabel("0.100 mm")
+        self.calculated_spacing_label.setStyleSheet("font-weight: bold;")
+        calc_spacing_layout.addWidget(self.calculated_spacing_label)
+        calc_spacing_layout.addStretch()
+        layout.addLayout(calc_spacing_layout)
 
         # Hatch angle field
         angle_layout = QHBoxLayout()
@@ -176,15 +188,18 @@ class EditBuildStepDialog(QDialog):
 
         # Set hatching parameters
         self.enable_hatching.setChecked(self.current_build_step.hatching_enabled)
-        self.hatch_spacing_edit.setText(str(self.current_build_step.hatch_spacing))
+        self.hatch_spacing_multiplier_edit.setText(str(self.current_build_step.hatch_spacing_multiplier))
         self.hatch_angle_edit.setText(str(self.current_build_step.hatch_angle))
         pattern_index = ["linear", "crosshatch"].index(self.current_build_step.hatch_pattern)
         self.hatch_pattern_combo.setCurrentIndex(pattern_index)
 
         if self.current_build_step.hatching_enabled:
-            self.hatch_spacing_edit.setEnabled(True)
+            self.hatch_spacing_multiplier_edit.setEnabled(True)
             self.hatch_angle_edit.setEnabled(True)
             self.hatch_pattern_combo.setEnabled(True)
+
+        # Update calculated spacing display
+        self.update_calculated_spacing()
 
         # Setup parameters for current shape
         self.setup_parameters_for_shape(self.current_build_step.shape_type, load_values=True)
@@ -195,9 +210,19 @@ class EditBuildStepDialog(QDialog):
         if not checked:
             self.starting_layer_edit.setText("0")
 
+    def update_calculated_spacing(self):
+        """Update the calculated spacing display based on multiplier"""
+        try:
+            multiplier = float(self.hatch_spacing_multiplier_edit.text())
+            spot_size_mm = self.spot_size_microns / 1000.0
+            calculated = spot_size_mm * multiplier
+            self.calculated_spacing_label.setText(f"{calculated:.3f} mm")
+        except (ValueError, ZeroDivisionError):
+            self.calculated_spacing_label.setText("-- mm")
+
     def on_hatching_toggled(self, checked):
         """Enable/disable hatching inputs based on checkbox"""
-        self.hatch_spacing_edit.setEnabled(checked)
+        self.hatch_spacing_multiplier_edit.setEnabled(checked)
         self.hatch_angle_edit.setEnabled(checked)
         self.hatch_pattern_combo.setEnabled(checked)
 
@@ -275,9 +300,9 @@ class EditBuildStepDialog(QDialog):
 
             # Validate hatching parameters if enabled
             if self.enable_hatching.isChecked():
-                spacing = float(self.hatch_spacing_edit.text())
-                if spacing <= 0:
-                    QMessageBox.warning(self, "Invalid Input", "Hatch spacing must be greater than 0.")
+                multiplier = float(self.hatch_spacing_multiplier_edit.text())
+                if multiplier <= 0:
+                    QMessageBox.warning(self, "Invalid Input", "Hatch spacing multiplier must be greater than 0.")
                     return False
 
                 # Validate angle (just check it's a valid float)
@@ -322,7 +347,10 @@ class EditBuildStepDialog(QDialog):
             # Update hatching parameters
             self.current_build_step.hatching_enabled = self.enable_hatching.isChecked()
             if self.enable_hatching.isChecked():
-                self.current_build_step.hatch_spacing = float(self.hatch_spacing_edit.text())
+                multiplier = float(self.hatch_spacing_multiplier_edit.text())
+                spot_size_mm = self.spot_size_microns / 1000.0
+                self.current_build_step.hatch_spacing_multiplier = multiplier
+                self.current_build_step.hatch_spacing = spot_size_mm * multiplier  # Store calculated value
                 self.current_build_step.hatch_angle = float(self.hatch_angle_edit.text())
                 self.current_build_step.hatch_pattern = self.hatch_pattern_combo.currentText()
 

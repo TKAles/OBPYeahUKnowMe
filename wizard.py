@@ -293,8 +293,9 @@ class PositionPage(QWizardPage):
 class HatchingPage(QWizardPage):
     """Fourth page of wizard - configure hatching parameters"""
 
-    def __init__(self):
+    def __init__(self, spot_size_microns: float = 100.0):
         super().__init__()
+        self.spot_size_microns = spot_size_microns
         self.setTitle("Hatching Configuration")
         self.setSubTitle("Configure scan pattern parameters for laser hatching:")
 
@@ -308,16 +309,26 @@ class HatchingPage(QWizardPage):
 
         layout.addSpacing(10)
 
-        # Hatch spacing field
+        # Hatch spacing multiplier field
         spacing_layout = QHBoxLayout()
-        spacing_layout.addWidget(QLabel("Hatch Spacing:"))
-        self.hatch_spacing_edit = QLineEdit()
-        self.hatch_spacing_edit.setPlaceholderText("0.1")
-        self.hatch_spacing_edit.setText("0.1")
-        self.hatch_spacing_edit.setEnabled(False)
-        spacing_layout.addWidget(self.hatch_spacing_edit)
-        spacing_layout.addWidget(QLabel("[mm]"))
+        spacing_layout.addWidget(QLabel("Hatch Spacing Multiplier:"))
+        self.hatch_spacing_multiplier_edit = QLineEdit()
+        self.hatch_spacing_multiplier_edit.setPlaceholderText("1.0")
+        self.hatch_spacing_multiplier_edit.setText("1.0")
+        self.hatch_spacing_multiplier_edit.setEnabled(False)
+        self.hatch_spacing_multiplier_edit.textChanged.connect(self.update_calculated_spacing)
+        spacing_layout.addWidget(self.hatch_spacing_multiplier_edit)
+        spacing_layout.addWidget(QLabel("x spot size"))
         layout.addLayout(spacing_layout)
+
+        # Calculated spacing display (read-only)
+        calc_spacing_layout = QHBoxLayout()
+        calc_spacing_layout.addWidget(QLabel("Calculated Spacing:"))
+        self.calculated_spacing_label = QLabel("0.100 mm")
+        self.calculated_spacing_label.setStyleSheet("font-weight: bold;")
+        calc_spacing_layout.addWidget(self.calculated_spacing_label)
+        calc_spacing_layout.addStretch()
+        layout.addLayout(calc_spacing_layout)
 
         # Hatch angle field
         angle_layout = QHBoxLayout()
@@ -341,12 +352,14 @@ class HatchingPage(QWizardPage):
         layout.addLayout(pattern_layout)
 
         # Add info label
+        spot_size_mm = self.spot_size_microns / 1000.0
         info_label = QLabel(
-            "Note: Hatching generates laser scan paths as start/end point pairs.\n"
-            "• Spacing: Distance between parallel scan lines\n"
-            "• Angle: Rotation of scan pattern (0° = horizontal)\n"
-            "• Linear: Single direction scan\n"
-            "• Crosshatch: Perpendicular scan pattern (0° + 90°)"
+            f"Note: Hatching generates laser scan paths as start/end point pairs.\n"
+            f"• Current beam spot size: {self.spot_size_microns:.0f} μm ({spot_size_mm:.3f} mm)\n"
+            f"• Multiplier: Controls spacing relative to spot size (1.0 = spacing equals spot size)\n"
+            f"• Angle: Rotation of scan pattern (0° = horizontal)\n"
+            f"• Linear: Single direction scan\n"
+            f"• Crosshatch: Perpendicular scan pattern (0° + 90°)"
         )
         info_label.setWordWrap(True)
         info_label.setStyleSheet("color: gray; font-style: italic;")
@@ -357,12 +370,25 @@ class HatchingPage(QWizardPage):
         self.setLayout(layout)
 
         # Connect validation signals
-        self.hatch_spacing_edit.textChanged.connect(self.completeChanged.emit)
+        self.hatch_spacing_multiplier_edit.textChanged.connect(self.completeChanged.emit)
         self.hatch_angle_edit.textChanged.connect(self.completeChanged.emit)
+
+        # Initialize calculated spacing
+        self.update_calculated_spacing()
+
+    def update_calculated_spacing(self):
+        """Update the calculated spacing display based on multiplier"""
+        try:
+            multiplier = float(self.hatch_spacing_multiplier_edit.text())
+            spot_size_mm = self.spot_size_microns / 1000.0
+            calculated = spot_size_mm * multiplier
+            self.calculated_spacing_label.setText(f"{calculated:.3f} mm")
+        except (ValueError, ZeroDivisionError):
+            self.calculated_spacing_label.setText("-- mm")
 
     def on_hatching_toggled(self, checked):
         """Enable/disable hatching inputs based on checkbox"""
-        self.hatch_spacing_edit.setEnabled(checked)
+        self.hatch_spacing_multiplier_edit.setEnabled(checked)
         self.hatch_angle_edit.setEnabled(checked)
         self.hatch_pattern_combo.setEnabled(checked)
 
@@ -372,9 +398,9 @@ class HatchingPage(QWizardPage):
             return True
 
         try:
-            # Validate spacing
-            spacing = float(self.hatch_spacing_edit.text())
-            if spacing <= 0:
+            # Validate multiplier
+            multiplier = float(self.hatch_spacing_multiplier_edit.text())
+            if multiplier <= 0:
                 return False
 
             # Validate angle
@@ -387,16 +413,23 @@ class HatchingPage(QWizardPage):
     def get_hatching_data(self):
         """Get the hatching configuration data"""
         try:
+            multiplier = float(self.hatch_spacing_multiplier_edit.text()) if self.enable_hatching.isChecked() else 1.0
+            spot_size_mm = self.spot_size_microns / 1000.0
+            calculated_spacing = spot_size_mm * multiplier
+
             return {
                 "hatching_enabled": self.enable_hatching.isChecked(),
-                "hatch_spacing": float(self.hatch_spacing_edit.text()) if self.enable_hatching.isChecked() else 0.1,
+                "hatch_spacing": calculated_spacing,  # Store calculated value for backward compatibility
+                "hatch_spacing_multiplier": multiplier,
                 "hatch_angle": float(self.hatch_angle_edit.text()) if self.enable_hatching.isChecked() else 0.0,
                 "hatch_pattern": self.hatch_pattern_combo.currentText() if self.enable_hatching.isChecked() else "linear"
             }
         except (ValueError, TypeError):
+            spot_size_mm = self.spot_size_microns / 1000.0
             return {
                 "hatching_enabled": False,
-                "hatch_spacing": 0.1,
+                "hatch_spacing": spot_size_mm,
+                "hatch_spacing_multiplier": 1.0,
                 "hatch_angle": 0.0,
                 "hatch_pattern": "linear"
             }
@@ -405,7 +438,7 @@ class HatchingPage(QWizardPage):
 class BuildStepWizard(QWizard):
     """Wizard for creating new build steps"""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, spot_size_microns: float = 100.0):
         super().__init__(parent)
         self.setWindowTitle("Add Build Step")
         self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
@@ -414,7 +447,7 @@ class BuildStepWizard(QWizard):
         self.shape_page = ShapeSelectionPage()
         self.parameters_page = ParametersPage()
         self.position_page = PositionPage()
-        self.hatching_page = HatchingPage()
+        self.hatching_page = HatchingPage(spot_size_microns)
 
         self.addPage(self.shape_page)
         self.addPage(self.parameters_page)
@@ -440,6 +473,7 @@ class BuildStepWizard(QWizard):
             starting_layer=position_data["starting_layer"],
             hatching_enabled=hatching_data["hatching_enabled"],
             hatch_spacing=hatching_data["hatch_spacing"],
+            hatch_spacing_multiplier=hatching_data["hatch_spacing_multiplier"],
             hatch_angle=hatching_data["hatch_angle"],
             hatch_pattern=hatching_data["hatch_pattern"]
         )
