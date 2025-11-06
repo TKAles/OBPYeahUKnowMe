@@ -26,7 +26,11 @@ class EditBuildStepDialog(QDialog):
             repetitions=self.original_build_step.repetitions,
             x_offset=self.original_build_step.x_offset,
             y_offset=self.original_build_step.y_offset,
-            starting_layer=self.original_build_step.starting_layer
+            starting_layer=self.original_build_step.starting_layer,
+            hatching_enabled=self.original_build_step.hatching_enabled,
+            hatch_spacing=self.original_build_step.hatch_spacing,
+            hatch_angle=self.original_build_step.hatch_angle,
+            hatch_pattern=self.original_build_step.hatch_pattern
         )
 
         self.setup_ui()
@@ -90,6 +94,44 @@ class EditBuildStepDialog(QDialog):
         layer_layout.addStretch()
         layout.addLayout(layer_layout)
 
+        # Hatching section
+        layout.addSpacing(10)
+
+        # Enable hatching checkbox
+        self.enable_hatching = QCheckBox("Enable hatching")
+        self.enable_hatching.toggled.connect(self.on_hatching_toggled)
+        layout.addWidget(self.enable_hatching)
+
+        # Hatch spacing field
+        spacing_layout = QHBoxLayout()
+        spacing_layout.addWidget(QLabel("Hatch Spacing:"))
+        self.hatch_spacing_edit = QLineEdit()
+        self.hatch_spacing_edit.setEnabled(False)
+        spacing_layout.addWidget(self.hatch_spacing_edit)
+        spacing_layout.addWidget(QLabel("[mm]"))
+        spacing_layout.addStretch()
+        layout.addLayout(spacing_layout)
+
+        # Hatch angle field
+        angle_layout = QHBoxLayout()
+        angle_layout.addWidget(QLabel("Hatch Angle:"))
+        self.hatch_angle_edit = QLineEdit()
+        self.hatch_angle_edit.setEnabled(False)
+        angle_layout.addWidget(self.hatch_angle_edit)
+        angle_layout.addWidget(QLabel("[degrees]"))
+        angle_layout.addStretch()
+        layout.addLayout(angle_layout)
+
+        # Hatch pattern selection
+        pattern_layout = QHBoxLayout()
+        pattern_layout.addWidget(QLabel("Hatch Pattern:"))
+        self.hatch_pattern_combo = QComboBox()
+        self.hatch_pattern_combo.addItems(["linear", "crosshatch"])
+        self.hatch_pattern_combo.setEnabled(False)
+        pattern_layout.addWidget(self.hatch_pattern_combo)
+        pattern_layout.addStretch()
+        layout.addLayout(pattern_layout)
+
         layout.addStretch()
 
         # Buttons
@@ -132,6 +174,18 @@ class EditBuildStepDialog(QDialog):
             self.enable_starting_layer.setChecked(False)
             self.starting_layer_edit.setEnabled(False)
 
+        # Set hatching parameters
+        self.enable_hatching.setChecked(self.current_build_step.hatching_enabled)
+        self.hatch_spacing_edit.setText(str(self.current_build_step.hatch_spacing))
+        self.hatch_angle_edit.setText(str(self.current_build_step.hatch_angle))
+        pattern_index = ["linear", "crosshatch"].index(self.current_build_step.hatch_pattern)
+        self.hatch_pattern_combo.setCurrentIndex(pattern_index)
+
+        if self.current_build_step.hatching_enabled:
+            self.hatch_spacing_edit.setEnabled(True)
+            self.hatch_angle_edit.setEnabled(True)
+            self.hatch_pattern_combo.setEnabled(True)
+
         # Setup parameters for current shape
         self.setup_parameters_for_shape(self.current_build_step.shape_type, load_values=True)
 
@@ -140,6 +194,12 @@ class EditBuildStepDialog(QDialog):
         self.starting_layer_edit.setEnabled(checked)
         if not checked:
             self.starting_layer_edit.setText("0")
+
+    def on_hatching_toggled(self, checked):
+        """Enable/disable hatching inputs based on checkbox"""
+        self.hatch_spacing_edit.setEnabled(checked)
+        self.hatch_angle_edit.setEnabled(checked)
+        self.hatch_pattern_combo.setEnabled(checked)
 
     def on_shape_changed(self, shape_text):
         """Handle shape type change"""
@@ -213,6 +273,16 @@ class EditBuildStepDialog(QDialog):
                 QMessageBox.warning(self, "Invalid Input", "Starting layer cannot be negative.")
                 return False
 
+            # Validate hatching parameters if enabled
+            if self.enable_hatching.isChecked():
+                spacing = float(self.hatch_spacing_edit.text())
+                if spacing <= 0:
+                    QMessageBox.warning(self, "Invalid Input", "Hatch spacing must be greater than 0.")
+                    return False
+
+                # Validate angle (just check it's a valid float)
+                float(self.hatch_angle_edit.text())
+
             # Validate all dimension parameters
             for field_name, widget in self.parameter_widgets.items():
                 text = widget.text().strip()
@@ -248,6 +318,13 @@ class EditBuildStepDialog(QDialog):
                 self.current_build_step.starting_layer = int(self.starting_layer_edit.text())
             else:
                 self.current_build_step.starting_layer = 0
+
+            # Update hatching parameters
+            self.current_build_step.hatching_enabled = self.enable_hatching.isChecked()
+            if self.enable_hatching.isChecked():
+                self.current_build_step.hatch_spacing = float(self.hatch_spacing_edit.text())
+                self.current_build_step.hatch_angle = float(self.hatch_angle_edit.text())
+                self.current_build_step.hatch_pattern = self.hatch_pattern_combo.currentText()
 
             # Update dimensions
             self.current_build_step.dimensions = {}

@@ -3,7 +3,7 @@ Wizard classes for creating and configuring build steps
 """
 
 from PyQt6.QtWidgets import (QWizard, QWizardPage, QVBoxLayout, QHBoxLayout,
-                              QRadioButton, QLabel, QLineEdit, QButtonGroup, QCheckBox)
+                              QRadioButton, QLabel, QLineEdit, QButtonGroup, QCheckBox, QComboBox)
 from models import BuildStep
 
 
@@ -290,6 +290,118 @@ class PositionPage(QWizardPage):
             return {"x_offset": 0.0, "y_offset": 0.0, "starting_layer": 0}
 
 
+class HatchingPage(QWizardPage):
+    """Fourth page of wizard - configure hatching parameters"""
+
+    def __init__(self):
+        super().__init__()
+        self.setTitle("Hatching Configuration")
+        self.setSubTitle("Configure scan pattern parameters for laser hatching:")
+
+        layout = QVBoxLayout()
+
+        # Enable hatching checkbox
+        self.enable_hatching = QCheckBox("Enable hatching")
+        self.enable_hatching.setChecked(False)
+        self.enable_hatching.toggled.connect(self.on_hatching_toggled)
+        layout.addWidget(self.enable_hatching)
+
+        layout.addSpacing(10)
+
+        # Hatch spacing field
+        spacing_layout = QHBoxLayout()
+        spacing_layout.addWidget(QLabel("Hatch Spacing:"))
+        self.hatch_spacing_edit = QLineEdit()
+        self.hatch_spacing_edit.setPlaceholderText("0.1")
+        self.hatch_spacing_edit.setText("0.1")
+        self.hatch_spacing_edit.setEnabled(False)
+        spacing_layout.addWidget(self.hatch_spacing_edit)
+        spacing_layout.addWidget(QLabel("[mm]"))
+        layout.addLayout(spacing_layout)
+
+        # Hatch angle field
+        angle_layout = QHBoxLayout()
+        angle_layout.addWidget(QLabel("Hatch Angle:"))
+        self.hatch_angle_edit = QLineEdit()
+        self.hatch_angle_edit.setPlaceholderText("0.0")
+        self.hatch_angle_edit.setText("0.0")
+        self.hatch_angle_edit.setEnabled(False)
+        angle_layout.addWidget(self.hatch_angle_edit)
+        angle_layout.addWidget(QLabel("[degrees]"))
+        layout.addLayout(angle_layout)
+
+        # Hatch pattern selection
+        pattern_layout = QHBoxLayout()
+        pattern_layout.addWidget(QLabel("Hatch Pattern:"))
+        self.hatch_pattern_combo = QComboBox()
+        self.hatch_pattern_combo.addItems(["linear", "crosshatch"])
+        self.hatch_pattern_combo.setEnabled(False)
+        pattern_layout.addWidget(self.hatch_pattern_combo)
+        pattern_layout.addStretch()
+        layout.addLayout(pattern_layout)
+
+        # Add info label
+        info_label = QLabel(
+            "Note: Hatching generates laser scan paths as start/end point pairs.\n"
+            "• Spacing: Distance between parallel scan lines\n"
+            "• Angle: Rotation of scan pattern (0° = horizontal)\n"
+            "• Linear: Single direction scan\n"
+            "• Crosshatch: Perpendicular scan pattern (0° + 90°)"
+        )
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: gray; font-style: italic;")
+        layout.addSpacing(10)
+        layout.addWidget(info_label)
+
+        layout.addStretch()
+        self.setLayout(layout)
+
+        # Connect validation signals
+        self.hatch_spacing_edit.textChanged.connect(self.completeChanged.emit)
+        self.hatch_angle_edit.textChanged.connect(self.completeChanged.emit)
+
+    def on_hatching_toggled(self, checked):
+        """Enable/disable hatching inputs based on checkbox"""
+        self.hatch_spacing_edit.setEnabled(checked)
+        self.hatch_angle_edit.setEnabled(checked)
+        self.hatch_pattern_combo.setEnabled(checked)
+
+    def isComplete(self):
+        """Page is complete when all fields have valid values or hatching is disabled"""
+        if not self.enable_hatching.isChecked():
+            return True
+
+        try:
+            # Validate spacing
+            spacing = float(self.hatch_spacing_edit.text())
+            if spacing <= 0:
+                return False
+
+            # Validate angle
+            float(self.hatch_angle_edit.text())
+
+            return True
+        except (ValueError, TypeError):
+            return False
+
+    def get_hatching_data(self):
+        """Get the hatching configuration data"""
+        try:
+            return {
+                "hatching_enabled": self.enable_hatching.isChecked(),
+                "hatch_spacing": float(self.hatch_spacing_edit.text()) if self.enable_hatching.isChecked() else 0.1,
+                "hatch_angle": float(self.hatch_angle_edit.text()) if self.enable_hatching.isChecked() else 0.0,
+                "hatch_pattern": self.hatch_pattern_combo.currentText() if self.enable_hatching.isChecked() else "linear"
+            }
+        except (ValueError, TypeError):
+            return {
+                "hatching_enabled": False,
+                "hatch_spacing": 0.1,
+                "hatch_angle": 0.0,
+                "hatch_pattern": "linear"
+            }
+
+
 class BuildStepWizard(QWizard):
     """Wizard for creating new build steps"""
 
@@ -302,16 +414,19 @@ class BuildStepWizard(QWizard):
         self.shape_page = ShapeSelectionPage()
         self.parameters_page = ParametersPage()
         self.position_page = PositionPage()
+        self.hatching_page = HatchingPage()
 
         self.addPage(self.shape_page)
         self.addPage(self.parameters_page)
         self.addPage(self.position_page)
+        self.addPage(self.hatching_page)
 
     def get_build_step(self):
         """Create BuildStep from wizard data"""
         shape_type = self.shape_page.get_selected_shape()
         params = self.parameters_page.get_parameters()
         position_data = self.position_page.get_position_data()
+        hatching_data = self.hatching_page.get_hatching_data()
 
         # Separate repetitions from dimensions
         repetitions = params.pop("repetitions", 1)
@@ -322,5 +437,9 @@ class BuildStepWizard(QWizard):
             repetitions=repetitions,
             x_offset=position_data["x_offset"],
             y_offset=position_data["y_offset"],
-            starting_layer=position_data["starting_layer"]
+            starting_layer=position_data["starting_layer"],
+            hatching_enabled=hatching_data["hatching_enabled"],
+            hatch_spacing=hatching_data["hatch_spacing"],
+            hatch_angle=hatching_data["hatch_angle"],
+            hatch_pattern=hatching_data["hatch_pattern"]
         )
