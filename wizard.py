@@ -3,7 +3,7 @@ Wizard classes for creating and configuring build steps
 """
 
 from PyQt6.QtWidgets import (QWizard, QWizardPage, QVBoxLayout, QHBoxLayout,
-                              QRadioButton, QLabel, QLineEdit, QButtonGroup)
+                              QRadioButton, QLabel, QLineEdit, QButtonGroup, QCheckBox)
 from models import BuildStep
 
 
@@ -189,6 +189,107 @@ class ParametersPage(QWizardPage):
         return params
 
 
+class PositionPage(QWizardPage):
+    """Third page of wizard - input position and layer settings"""
+
+    def __init__(self):
+        super().__init__()
+        self.setTitle("Position & Layer Settings")
+        self.setSubTitle("Configure the position offset and starting layer:")
+
+        layout = QVBoxLayout()
+
+        # X Offset field
+        x_layout = QHBoxLayout()
+        x_layout.addWidget(QLabel("X Offset:"))
+        self.x_offset_edit = QLineEdit()
+        self.x_offset_edit.setPlaceholderText("0.0")
+        self.x_offset_edit.setText("0.0")
+        x_layout.addWidget(self.x_offset_edit)
+        x_layout.addWidget(QLabel("[mm]"))
+        layout.addLayout(x_layout)
+
+        # Y Offset field
+        y_layout = QHBoxLayout()
+        y_layout.addWidget(QLabel("Y Offset:"))
+        self.y_offset_edit = QLineEdit()
+        self.y_offset_edit.setPlaceholderText("0.0")
+        self.y_offset_edit.setText("0.0")
+        y_layout.addWidget(self.y_offset_edit)
+        y_layout.addWidget(QLabel("[mm]"))
+        layout.addLayout(y_layout)
+
+        # Add spacing
+        layout.addSpacing(20)
+
+        # Starting layer checkbox
+        self.enable_starting_layer = QCheckBox("Enable custom starting layer")
+        self.enable_starting_layer.setChecked(False)
+        self.enable_starting_layer.toggled.connect(self.on_starting_layer_toggled)
+        layout.addWidget(self.enable_starting_layer)
+
+        # Starting layer field
+        layer_layout = QHBoxLayout()
+        layer_layout.addWidget(QLabel("Starting Layer:"))
+        self.starting_layer_edit = QLineEdit()
+        self.starting_layer_edit.setPlaceholderText("0")
+        self.starting_layer_edit.setText("0")
+        self.starting_layer_edit.setEnabled(False)
+        layer_layout.addWidget(self.starting_layer_edit)
+        layer_layout.addWidget(QLabel("(0 = build from bottom)"))
+        layout.addLayout(layer_layout)
+
+        # Add info label
+        info_label = QLabel(
+            "Note: Custom starting layer allows building multiple objects\n"
+            "at different Z-heights (e.g., for building separate parts)."
+        )
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: gray; font-style: italic;")
+        layout.addWidget(info_label)
+
+        layout.addStretch()
+        self.setLayout(layout)
+
+        # Connect validation signals
+        self.x_offset_edit.textChanged.connect(self.completeChanged.emit)
+        self.y_offset_edit.textChanged.connect(self.completeChanged.emit)
+        self.starting_layer_edit.textChanged.connect(self.completeChanged.emit)
+
+    def on_starting_layer_toggled(self, checked):
+        """Enable/disable starting layer input based on checkbox"""
+        self.starting_layer_edit.setEnabled(checked)
+        if not checked:
+            self.starting_layer_edit.setText("0")
+
+    def isComplete(self):
+        """Page is complete when all fields have valid values"""
+        try:
+            # Validate offsets
+            float(self.x_offset_edit.text())
+            float(self.y_offset_edit.text())
+
+            # Validate starting layer
+            layer = int(self.starting_layer_edit.text())
+            if layer < 0:
+                return False
+
+            return True
+        except (ValueError, TypeError):
+            return False
+
+    def get_position_data(self):
+        """Get the position and layer data"""
+        try:
+            return {
+                "x_offset": float(self.x_offset_edit.text()),
+                "y_offset": float(self.y_offset_edit.text()),
+                "starting_layer": int(self.starting_layer_edit.text()) if self.enable_starting_layer.isChecked() else 0
+            }
+        except (ValueError, TypeError):
+            return {"x_offset": 0.0, "y_offset": 0.0, "starting_layer": 0}
+
+
 class BuildStepWizard(QWizard):
     """Wizard for creating new build steps"""
 
@@ -200,14 +301,17 @@ class BuildStepWizard(QWizard):
         # Add pages
         self.shape_page = ShapeSelectionPage()
         self.parameters_page = ParametersPage()
+        self.position_page = PositionPage()
 
         self.addPage(self.shape_page)
         self.addPage(self.parameters_page)
+        self.addPage(self.position_page)
 
     def get_build_step(self):
         """Create BuildStep from wizard data"""
         shape_type = self.shape_page.get_selected_shape()
         params = self.parameters_page.get_parameters()
+        position_data = self.position_page.get_position_data()
 
         # Separate repetitions from dimensions
         repetitions = params.pop("repetitions", 1)
@@ -215,5 +319,8 @@ class BuildStepWizard(QWizard):
         return BuildStep(
             shape_type=shape_type,
             dimensions=params,
-            repetitions=repetitions
+            repetitions=repetitions,
+            x_offset=position_data["x_offset"],
+            y_offset=position_data["y_offset"],
+            starting_layer=position_data["starting_layer"]
         )

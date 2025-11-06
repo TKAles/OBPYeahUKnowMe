@@ -115,15 +115,22 @@ class Build3DVisualizer(FigureCanvas):
             self.draw()
             return
 
-        current_z = 0
         colors = ['gold', 'lightgreen', 'lightblue', 'lightcoral', 'plum', 'orange']
 
         # Collect all polygons with their z-order for proper rendering
         all_polygons = []
+        max_z = 0  # Track maximum Z height for axis limits
 
         for step_index, build_step in enumerate(build_steps):
             color = colors[step_index % len(colors)]
             dims = build_step.dimensions
+
+            # Get position offsets from build step
+            x_offset = build_step.x_offset
+            y_offset = build_step.y_offset
+
+            # Calculate starting Z based on starting layer
+            current_z = build_step.starting_layer * layer_height
 
             # Create each repetition
             for rep in range(build_step.repetitions):
@@ -131,7 +138,7 @@ class Build3DVisualizer(FigureCanvas):
 
                 if build_step.shape_type == "square":
                     size = dims.get("size", 10)
-                    faces = self.create_box_vertices(size, size, layer_height, 0, 0, z_offset)
+                    faces = self.create_box_vertices(size, size, layer_height, x_offset, y_offset, z_offset)
                     poly3d = Poly3DCollection(faces, facecolor=color, edgecolor='black',
                                              linewidths=0.5, alpha=0.9)
                     poly3d.set_sort_zpos(z_offset)
@@ -140,7 +147,7 @@ class Build3DVisualizer(FigureCanvas):
                 elif build_step.shape_type == "rectangle":
                     width = dims.get("width", 10)
                     length = dims.get("length", 15)
-                    faces = self.create_box_vertices(width, length, layer_height, 0, 0, z_offset)
+                    faces = self.create_box_vertices(width, length, layer_height, x_offset, y_offset, z_offset)
                     poly3d = Poly3DCollection(faces, facecolor=color, edgecolor='black',
                                              linewidths=0.5, alpha=0.9)
                     poly3d.set_sort_zpos(z_offset)
@@ -149,7 +156,7 @@ class Build3DVisualizer(FigureCanvas):
                 elif build_step.shape_type == "circle":
                     diameter = dims.get("diameter", 10)
                     radius = diameter / 2
-                    faces = self.create_cylinder_faces(radius, layer_height, 16, 0, 0, z_offset)
+                    faces = self.create_cylinder_faces(radius, layer_height, 16, x_offset, y_offset, z_offset)
                     poly3d = Poly3DCollection(faces, facecolor=color, edgecolor='black',
                                              linewidths=0.5, alpha=0.9)
                     poly3d.set_sort_zpos(z_offset)
@@ -160,7 +167,7 @@ class Build3DVisualizer(FigureCanvas):
                     length = dims.get("length", 15)
                     # Use larger radius and scale for ellipse
                     radius = max(width, length) / 2
-                    faces = self.create_cylinder_faces(radius, layer_height, 24, 0, 0, z_offset)
+                    faces = self.create_cylinder_faces(radius, layer_height, 24, x_offset, y_offset, z_offset)
 
                     # Scale faces to create ellipse
                     scale_x = width / (2 * radius)
@@ -180,6 +187,7 @@ class Build3DVisualizer(FigureCanvas):
                     all_polygons.append((z_offset, poly3d))
 
                 current_z += layer_height
+                max_z = max(max_z, current_z)
 
         # Add polygons in order from bottom to top for correct z-sorting
         for z_pos, poly3d in sorted(all_polygons, key=lambda x: x[0]):
@@ -188,19 +196,37 @@ class Build3DVisualizer(FigureCanvas):
         # Set axis limits and aspect ratio
         if build_steps:
             max_dim = 0
+            max_x_extent = 0
+            max_y_extent = 0
+
             for build_step in build_steps:
                 dims = build_step.dimensions
-                if build_step.shape_type == "square":
-                    max_dim = max(max_dim, dims.get("size", 10))
-                elif build_step.shape_type in ["rectangle", "ellipse"]:
-                    max_dim = max(max_dim, dims.get("width", 10), dims.get("length", 15))
-                elif build_step.shape_type == "circle":
-                    max_dim = max(max_dim, dims.get("diameter", 10))
+                x_off = abs(build_step.x_offset)
+                y_off = abs(build_step.y_offset)
 
-            limit = max_dim / 2 * 1.2
-            self.ax.set_xlim([-limit, limit])
-            self.ax.set_ylim([-limit, limit])
-            self.ax.set_zlim([0, current_z * 1.1])
+                if build_step.shape_type == "square":
+                    size = dims.get("size", 10)
+                    max_dim = max(max_dim, size)
+                    max_x_extent = max(max_x_extent, x_off + size / 2)
+                    max_y_extent = max(max_y_extent, y_off + size / 2)
+                elif build_step.shape_type in ["rectangle", "ellipse"]:
+                    width = dims.get("width", 10)
+                    length = dims.get("length", 15)
+                    max_dim = max(max_dim, width, length)
+                    max_x_extent = max(max_x_extent, x_off + width / 2)
+                    max_y_extent = max(max_y_extent, y_off + length / 2)
+                elif build_step.shape_type == "circle":
+                    diameter = dims.get("diameter", 10)
+                    max_dim = max(max_dim, diameter)
+                    max_x_extent = max(max_x_extent, x_off + diameter / 2)
+                    max_y_extent = max(max_y_extent, y_off + diameter / 2)
+
+            # Set limits with some padding
+            x_limit = max_x_extent * 1.2
+            y_limit = max_y_extent * 1.2
+            self.ax.set_xlim([-x_limit, x_limit])
+            self.ax.set_ylim([-y_limit, y_limit])
+            self.ax.set_zlim([0, max_z * 1.1])
 
         # Set viewing angle
         self.ax.view_init(elev=30, azim=45)

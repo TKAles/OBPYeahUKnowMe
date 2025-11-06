@@ -5,7 +5,7 @@ Dialog classes for editing build steps and recoater settings
 from typing import Optional
 from PyQt6 import uic
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-                              QLineEdit, QPushButton, QComboBox, QMessageBox)
+                              QLineEdit, QPushButton, QComboBox, QMessageBox, QCheckBox)
 from models import BuildStep, RecoaterSettings
 
 
@@ -23,7 +23,10 @@ class EditBuildStepDialog(QDialog):
         self.current_build_step = BuildStep(
             shape_type=self.original_build_step.shape_type,
             dimensions=self.original_build_step.dimensions.copy(),
-            repetitions=self.original_build_step.repetitions
+            repetitions=self.original_build_step.repetitions,
+            x_offset=self.original_build_step.x_offset,
+            y_offset=self.original_build_step.y_offset,
+            starting_layer=self.original_build_step.starting_layer
         )
 
         self.setup_ui()
@@ -55,6 +58,38 @@ class EditBuildStepDialog(QDialog):
         rep_layout.addStretch()
         layout.addLayout(rep_layout)
 
+        # X Offset field
+        x_layout = QHBoxLayout()
+        x_layout.addWidget(QLabel("X Offset:"))
+        self.x_offset_edit = QLineEdit()
+        x_layout.addWidget(self.x_offset_edit)
+        x_layout.addWidget(QLabel("[mm]"))
+        x_layout.addStretch()
+        layout.addLayout(x_layout)
+
+        # Y Offset field
+        y_layout = QHBoxLayout()
+        y_layout.addWidget(QLabel("Y Offset:"))
+        self.y_offset_edit = QLineEdit()
+        y_layout.addWidget(self.y_offset_edit)
+        y_layout.addWidget(QLabel("[mm]"))
+        y_layout.addStretch()
+        layout.addLayout(y_layout)
+
+        # Starting layer checkbox
+        self.enable_starting_layer = QCheckBox("Enable custom starting layer")
+        self.enable_starting_layer.toggled.connect(self.on_starting_layer_toggled)
+        layout.addWidget(self.enable_starting_layer)
+
+        # Starting layer field
+        layer_layout = QHBoxLayout()
+        layer_layout.addWidget(QLabel("Starting Layer:"))
+        self.starting_layer_edit = QLineEdit()
+        self.starting_layer_edit.setEnabled(False)
+        layer_layout.addWidget(self.starting_layer_edit)
+        layer_layout.addStretch()
+        layout.addLayout(layer_layout)
+
         layout.addStretch()
 
         # Buttons
@@ -84,8 +119,27 @@ class EditBuildStepDialog(QDialog):
         # Set repetitions
         self.repetitions_edit.setText(str(self.current_build_step.repetitions))
 
+        # Set offsets
+        self.x_offset_edit.setText(str(self.current_build_step.x_offset))
+        self.y_offset_edit.setText(str(self.current_build_step.y_offset))
+
+        # Set starting layer
+        self.starting_layer_edit.setText(str(self.current_build_step.starting_layer))
+        if self.current_build_step.starting_layer > 0:
+            self.enable_starting_layer.setChecked(True)
+            self.starting_layer_edit.setEnabled(True)
+        else:
+            self.enable_starting_layer.setChecked(False)
+            self.starting_layer_edit.setEnabled(False)
+
         # Setup parameters for current shape
         self.setup_parameters_for_shape(self.current_build_step.shape_type, load_values=True)
+
+    def on_starting_layer_toggled(self, checked):
+        """Enable/disable starting layer input based on checkbox"""
+        self.starting_layer_edit.setEnabled(checked)
+        if not checked:
+            self.starting_layer_edit.setText("0")
 
     def on_shape_changed(self, shape_text):
         """Handle shape type change"""
@@ -149,6 +203,16 @@ class EditBuildStepDialog(QDialog):
                 QMessageBox.warning(self, "Invalid Input", "Repetitions must be at least 1.")
                 return False
 
+            # Validate offsets (can be any float value)
+            float(self.x_offset_edit.text())
+            float(self.y_offset_edit.text())
+
+            # Validate starting layer
+            starting_layer = int(self.starting_layer_edit.text())
+            if starting_layer < 0:
+                QMessageBox.warning(self, "Invalid Input", "Starting layer cannot be negative.")
+                return False
+
             # Validate all dimension parameters
             for field_name, widget in self.parameter_widgets.items():
                 text = widget.text().strip()
@@ -174,6 +238,16 @@ class EditBuildStepDialog(QDialog):
         try:
             # Update the current build step with new values
             self.current_build_step.repetitions = int(self.repetitions_edit.text())
+
+            # Update offsets
+            self.current_build_step.x_offset = float(self.x_offset_edit.text())
+            self.current_build_step.y_offset = float(self.y_offset_edit.text())
+
+            # Update starting layer
+            if self.enable_starting_layer.isChecked():
+                self.current_build_step.starting_layer = int(self.starting_layer_edit.text())
+            else:
+                self.current_build_step.starting_layer = 0
 
             # Update dimensions
             self.current_build_step.dimensions = {}
