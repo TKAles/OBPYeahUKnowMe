@@ -22,6 +22,9 @@ class BuildStep:
     shape_type: str = ""
     dimensions: dict = None
     repetitions: int = 1
+    x_offset: float = 0.0  # mm
+    y_offset: float = 0.0  # mm
+    starting_layer: int = 0  # Layer number to start building (0-based)
 
     def __post_init__(self):
         if self.dimensions is None:
@@ -45,19 +48,40 @@ class BuildStep:
 
     def to_list_item_text(self) -> str:
         """Format as list item text"""
-        return f"{self.shape_type.capitalize()} | {self.format_dimensions()} | {self.repetitions} Repetitions"
+        offset_str = f"@({self.x_offset:.1f},{self.y_offset:.1f})" if (self.x_offset != 0 or self.y_offset != 0) else "@(0,0)"
+        layer_str = f"Layer {self.starting_layer}" if self.starting_layer > 0 else ""
+
+        base_text = f"{self.shape_type.capitalize()} | {self.format_dimensions()} | {self.repetitions} Reps | {offset_str}"
+        if layer_str:
+            base_text += f" | {layer_str}"
+        return base_text
 
     @classmethod
     def from_list_item_text(cls, text: str) -> 'BuildStep':
         """Parse BuildStep from list item text"""
         try:
             parts = text.split(" | ")
-            if len(parts) != 3:
+            if len(parts) < 4:
                 raise ValueError("Invalid format")
 
             shape_type = parts[0].lower()
             dimensions_str = parts[1]
             repetitions = int(parts[2].split()[0])
+
+            # Parse offset from format "@(x,y)"
+            offset_str = parts[3]
+            x_offset = 0.0
+            y_offset = 0.0
+            if offset_str.startswith("@(") and offset_str.endswith(")"):
+                coords = offset_str[2:-1].split(",")
+                if len(coords) == 2:
+                    x_offset = float(coords[0])
+                    y_offset = float(coords[1])
+
+            # Parse starting layer if present
+            starting_layer = 0
+            if len(parts) >= 5 and parts[4].startswith("Layer "):
+                starting_layer = int(parts[4].split()[1])
 
             # Parse dimensions based on shape type
             dimensions = {}
@@ -82,7 +106,14 @@ class BuildStep:
                 if len(dims) == 2:
                     dimensions = {"width": float(dims[0]), "length": float(dims[1])}
 
-            return cls(shape_type=shape_type, dimensions=dimensions, repetitions=repetitions)
+            return cls(
+                shape_type=shape_type,
+                dimensions=dimensions,
+                repetitions=repetitions,
+                x_offset=x_offset,
+                y_offset=y_offset,
+                starting_layer=starting_layer
+            )
 
         except (ValueError, IndexError):
             # Return default if parsing fails
